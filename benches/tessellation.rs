@@ -24,7 +24,8 @@ fn parse_xyzr(content: &str) -> Vec<Ball> {
 
 fn load_balls(name: &str) -> Vec<Ball> {
     let path = format!("benches/data/{}.xyzr", name);
-    let content = fs::read_to_string(&path).expect(&format!("Failed to read {}", path));
+    let content =
+        fs::read_to_string(&path).unwrap_or_else(|e| panic!("Failed to read {path}: {e}"));
     parse_xyzr(&content)
 }
 

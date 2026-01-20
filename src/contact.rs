@@ -264,12 +264,16 @@ pub fn construct_contact_descriptor(
     Some(cd)
 }
 
-/// Initialize hexagonal contour from intersection circle
+/// Initialize hexagonal contour from intersection circle.
+/// The contour starts as a regular hexagon inscribed in a circle slightly
+/// larger than the intersection circle (factor 1.19 ≈ 1/cos(30°) ensures
+/// the hexagon fully contains the circle for robust cutting).
 fn init_contour(contour: &mut Contour, a_id: usize, base: &Sphere, axis: &Vector3<f64>) {
     contour.clear();
 
-    // Create hexagonal contour slightly outside the circle (factor 1.19)
-    let first_point = any_normal_of_vector(axis) * base.r * 1.19;
+    // 1.19 ≈ 1/cos(30°): ensures hexagon vertices are outside the circle
+    const HEXAGON_SCALE: f64 = 1.19;
+    let first_point = any_normal_of_vector(axis) * base.r * HEXAGON_SCALE;
     let angle_step = PI / 3.0;
 
     contour.push(ContourPoint::new(base.center + first_point, a_id, a_id));
@@ -375,26 +379,31 @@ fn cut_contour(
         }
     }
 
-    // Handle single point case
-    if start == end {
-        contour.insert(start, contour[start].clone());
-        end = start + 1;
-    } else if start < end {
-        // Remove points between start and end (exclusive)
-        if start + 1 < end {
-            contour.drain((start + 1)..end);
+    // Handle different contour cut cases
+    match start.cmp(&end) {
+        std::cmp::Ordering::Equal => {
+            // Single point case
+            contour.insert(start, contour[start].clone());
+            end = start + 1;
         }
-        end = start + 1;
-    } else {
-        // Wrap-around: remove after start and before end
-        if start + 1 < contour.len() {
-            contour.drain((start + 1)..);
+        std::cmp::Ordering::Less => {
+            // Remove points between start and end (exclusive)
+            if start + 1 < end {
+                contour.drain((start + 1)..end);
+            }
+            end = start + 1;
         }
-        if end > 0 {
-            contour.drain(0..end);
+        std::cmp::Ordering::Greater => {
+            // Wrap-around: remove after start and before end
+            if start + 1 < contour.len() {
+                contour.drain((start + 1)..);
+            }
+            if end > 0 {
+                contour.drain(0..end);
+            }
+            start = contour.len() - 1;
+            end = 0;
         }
-        start = contour.len() - 1;
-        end = 0;
     }
 
     // Calculate intersection points

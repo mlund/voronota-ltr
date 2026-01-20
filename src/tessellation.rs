@@ -13,11 +13,10 @@ pub fn compute_tessellation(balls: &[Ball], probe: f64) -> TessellationResult {
         return TessellationResult::default();
     }
 
-    // Convert balls to spheres (add probe to radii)
+    // Convert balls to spheres (add probe to radii) and build spatial index
     let spheres: Vec<Sphere> = balls.iter().map(|b| Sphere::from_ball(b, probe)).collect();
-
-    // Build spatial index
-    let searcher = SpheresSearcher::new(spheres.clone());
+    let searcher = SpheresSearcher::new(spheres);
+    let spheres = searcher.spheres();
 
     // Find all collision pairs and their neighbors
     let collision_data: Vec<_> = (0..spheres.len())
@@ -96,14 +95,12 @@ pub fn compute_tessellation_periodic(
 
     let n = balls.len();
 
-    // Convert balls to spheres
+    // Convert balls to spheres (keep copy for cell computation)
     let input_spheres: Vec<Sphere> = balls.iter().map(|b| Sphere::from_ball(b, probe)).collect();
 
-    // Create 27 periodic images (original + 26 shifted copies)
+    // Create 27 periodic images and build spatial index
     let populated_spheres = populate_periodic_spheres(&input_spheres, periodic_box);
-
-    // Build spatial index on all periodic images
-    let searcher = SpheresSearcher::new(populated_spheres.clone());
+    let searcher = SpheresSearcher::new(populated_spheres);
 
     // Find collisions for original spheres only (indices 0..n)
     let collision_data: Vec<_> = (0..n)
