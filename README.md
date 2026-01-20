@@ -1,30 +1,22 @@
-# Rust Port of VoronotaLT
+# Rust Port of Voronota-LT
 
 Unofficial Rust port of [voronota-lt](https://github.com/kliment-olechnovic/voronota/tree/master/expansion_lt)
 originally written in C++.
 Computes radical Voronoi tessellation of atomic balls constrained inside a solvent-accessible surface.
 Outputs inter-atom contact areas, solvent accessible surface (SAS) areas, and volumes.
 
-## Benchmarks
+## Features
 
-Performance on Apple Silicon M4 (10 cores); the speedup is relative to single threaded runs.
-
-| Dataset        | Balls | C++ (OpenMP) | Rust (Rayon) | C++ Speedup | Rust Speedup |
-|----------------|-------|--------------|--------------|-------------|--------------|
-| `balls_cs_1x1` | 100   | 179 µs       | 79 µs        | 0.4x        | 0.8x         |
-| `balls_2zsk`   | 3545  | 14 ms        | 12 ms        | 5.1x        | 5.9x         |
-| `balls_3dlb`   | 9745  | 38 ms        | 30 ms        | 5.0x        | 5.9x         |
+- [x] Basic radical tesselation (stateless)
+- [x] Periodic boundaries
+- [x] Groupings to avoid internal contacts
+- [x] Parallel processing using Rayon - see benchmarks below
+- [x] Unit-tests and benchmarks carried over from the C++ side
+- [x] Pure, safe Rust
 
 ## Installation
 
-### Library
-
-```toml
-[dependencies]
-voronotalt = "0.1"
-```
-
-### CLI
+The port can be used either as a library for other projects, or as a basic CLI tool:
 
 ```sh
 cargo install voronotalt
@@ -81,14 +73,18 @@ voronotalt -i atoms.xyzr --probe 1.4 --print-cells
 
 # With periodic boundary conditions
 voronotalt -i atoms.xyzr --probe 1.4 --periodic-box-corners 0 0 0 100 100 100
-
-# From stdin
-cat atoms.xyzr | voronotalt --probe 1.4
 ```
 
-Run `voronotalt --help` for all options.
+## Benchmarks
 
 Run benchmarks with `cargo bench`.
+Performance on Apple M4 processor (10 cores) - the speedup is relative to single threaded runs:
+
+| Dataset        | Balls | C++ (OpenMP) | Rust (Rayon) | C++ Speedup | Rust Speedup |
+|----------------|-------|--------------|--------------|-------------|--------------|
+| `balls_cs_1x1` | 100   | 179 µs       | 79 µs        | 0.4x        | 0.8x         |
+| `balls_2zsk`   | 3545  | 14 ms        | 12 ms        | 5.1x        | 5.9x         |
+| `balls_3dlb`   | 9745  | 38 ms        | 30 ms        | 5.0x        | 5.9x         |
 
 ## License
 
