@@ -8,7 +8,14 @@ use crate::types::{
 };
 
 /// Main entry point: compute radical tessellation contacts and cells
-pub fn compute_tessellation(balls: &[Ball], probe: f64) -> TessellationResult {
+///
+/// If `groups` is provided, contacts between spheres with the same group ID are excluded.
+/// This is useful for filtering out intra-chain or intra-residue contacts in molecular structures.
+pub fn compute_tessellation(
+    balls: &[Ball],
+    probe: f64,
+    groups: Option<&[i32]>,
+) -> TessellationResult {
     if balls.is_empty() {
         return TessellationResult::default();
     }
@@ -34,14 +41,8 @@ pub fn compute_tessellation(balls: &[Ball], probe: f64) -> TessellationResult {
         .collect();
 
     // Collect unique collision pairs (a < b) to avoid duplicate work
-    let mut collision_pairs: Vec<(usize, usize)> = Vec::new();
-    for (a_id, neighbors) in all_collisions.iter().enumerate() {
-        for neighbor in neighbors {
-            if a_id < neighbor.index {
-                collision_pairs.push((a_id, neighbor.index));
-            }
-        }
-    }
+    // Skip pairs where both spheres have the same group ID
+    let collision_pairs = collect_collision_pairs(&all_collisions, groups);
 
     // Construct contact descriptors in parallel
     let contact_summaries: Vec<Option<ContactDescriptorSummary>> = collision_pairs
@@ -83,11 +84,40 @@ pub fn compute_tessellation(balls: &[Ball], probe: f64) -> TessellationResult {
     TessellationResult { contacts, cells }
 }
 
+/// Collect unique collision pairs, optionally filtering by group
+fn collect_collision_pairs(
+    all_collisions: &[Vec<ValuedId>],
+    groups: Option<&[i32]>,
+) -> Vec<(usize, usize)> {
+    let mut pairs = Vec::new();
+    for (a_id, neighbors) in all_collisions.iter().enumerate() {
+        for neighbor in neighbors {
+            let b_id = neighbor.index;
+            if a_id < b_id && !same_group(groups, a_id, b_id) {
+                pairs.push((a_id, b_id));
+            }
+        }
+    }
+    pairs
+}
+
+/// Check if two spheres belong to the same group
+#[inline]
+fn same_group(groups: Option<&[i32]>, a: usize, b: usize) -> bool {
+    match groups {
+        Some(g) if a < g.len() && b < g.len() => g[a] == g[b],
+        _ => false,
+    }
+}
+
 /// Compute radical tessellation with periodic boundary conditions
+///
+/// If `groups` is provided, contacts between spheres with the same group ID are excluded.
 pub fn compute_tessellation_periodic(
     balls: &[Ball],
     probe: f64,
     periodic_box: &PeriodicBox,
+    groups: Option<&[i32]>,
 ) -> TessellationResult {
     if balls.is_empty() {
         return TessellationResult::default();
@@ -119,7 +149,7 @@ pub fn compute_tessellation_periodic(
 
     // Collect unique collision pairs
     // For periodic: (a, b) where a is canonical (0..n) and b can be periodic image
-    let collision_pairs = collect_periodic_collision_pairs(&all_collisions, n);
+    let collision_pairs = collect_periodic_collision_pairs(&all_collisions, n, groups);
 
     // Construct contact descriptors in parallel
     let contact_summaries: Vec<Option<ContactDescriptorSummary>> = collision_pairs
@@ -192,6 +222,7 @@ fn populate_periodic_spheres(spheres: &[Sphere], pbox: &PeriodicBox) -> Vec<Sphe
 fn collect_periodic_collision_pairs(
     all_collisions: &[Vec<ValuedId>],
     n: usize,
+    groups: Option<&[i32]>,
 ) -> Vec<(usize, usize)> {
     let mut pairs = Vec::new();
 
@@ -199,6 +230,11 @@ fn collect_periodic_collision_pairs(
         for neighbor in neighbors {
             let b_id = neighbor.index;
             let b_canonical = b_id % n;
+
+            // Skip if same group (use canonical indices for group lookup)
+            if same_group(groups, a_id, b_canonical) {
+                continue;
+            }
 
             // Include pair if:
             // - b is a periodic image (b_id >= n), OR
@@ -319,7 +355,7 @@ mod tests {
     fn test_two_spheres() {
         let balls = vec![Ball::new(0.0, 0.0, 0.0, 1.0), Ball::new(2.0, 0.0, 0.0, 1.0)];
 
-        let result = compute_tessellation(&balls, 0.5);
+        let result = compute_tessellation(&balls, 0.5, None);
 
         assert_eq!(result.contacts.len(), 1);
         assert!(result.contacts[0].area > 0.0);
@@ -334,7 +370,7 @@ mod tests {
     fn test_single_sphere() {
         let balls = vec![Ball::new(0.0, 0.0, 0.0, 1.0)];
 
-        let result = compute_tessellation(&balls, 0.5);
+        let result = compute_tessellation(&balls, 0.5, None);
 
         // No contacts for single sphere
         assert!(result.contacts.is_empty());
@@ -353,7 +389,7 @@ mod tests {
             Ball::new(1.0, 1.7, 0.0, 1.0),
         ];
 
-        let result = compute_tessellation(&balls, 0.5);
+        let result = compute_tessellation(&balls, 0.5, None);
 
         // Should have 3 contacts (each pair)
         assert_eq!(result.contacts.len(), 3);
@@ -369,7 +405,7 @@ mod tests {
             Ball::new(10.0, 0.0, 0.0, 1.0),
         ];
 
-        let result = compute_tessellation(&balls, 0.5);
+        let result = compute_tessellation(&balls, 0.5, None);
 
         // No contacts between well-separated spheres
         assert!(result.contacts.is_empty());
@@ -381,7 +417,7 @@ mod tests {
     #[test]
     fn test_empty_input() {
         let balls: Vec<Ball> = vec![];
-        let result = compute_tessellation(&balls, 0.5);
+        let result = compute_tessellation(&balls, 0.5, None);
 
         assert!(result.contacts.is_empty());
         assert!(result.cells.is_empty());
@@ -412,7 +448,7 @@ mod tests {
             Ball::new(-0.382683, 0.92388, 0.0, 0.5),
         ];
 
-        let result = compute_tessellation(&balls, 1.0);
+        let result = compute_tessellation(&balls, 1.0, None);
 
         // C++ produces 44 contacts in basic mode
         assert_eq!(result.contacts.len(), 44);
@@ -473,7 +509,7 @@ mod tests {
             Ball::new(1.0, 0.0, 0.0, 1.0),
         ];
 
-        let result = compute_tessellation(&balls, 1.0);
+        let result = compute_tessellation(&balls, 1.0, None);
 
         // Middle ball (1) should contact both end balls
         assert_eq!(result.cells.len(), 3);
@@ -490,7 +526,7 @@ mod tests {
             Ball::new(0.0, 1.0, 1.0, 1.0),
         ];
 
-        let result = compute_tessellation(&balls, 2.0);
+        let result = compute_tessellation(&balls, 2.0, None);
 
         assert_eq!(result.cells.len(), 4);
         // Each ball contacts its neighbors
@@ -511,7 +547,7 @@ mod tests {
             Ball::new(1.0, 1.0, 1.0, 1.0),
         ];
 
-        let result = compute_tessellation(&balls, 2.0);
+        let result = compute_tessellation(&balls, 2.0, None);
 
         assert_eq!(result.cells.len(), 8);
         assert!(!result.contacts.is_empty());
@@ -526,7 +562,7 @@ mod tests {
             Ball::new(1.0, 0.0, 0.0, 1.0),
         ];
 
-        let result = compute_tessellation(&balls, 0.5);
+        let result = compute_tessellation(&balls, 0.5, None);
 
         // Ball 1 is hidden inside ball 0 - should only have 2 cells
         // (hidden balls are excluded in C++ when discard_hidden=true)
@@ -641,7 +677,7 @@ mod tests {
             Ball::new(17.76, 27.17, 109.62, 3.0),
         ];
 
-        let result = compute_tessellation(&balls, 2.0);
+        let result = compute_tessellation(&balls, 2.0, None);
 
         // C++ expected: 153 contacts, 100 cells
         assert_approx!(result.contacts.len() as f64, 153.0, 1.0, "contact count");
@@ -694,7 +730,7 @@ mod tests {
         ];
 
         let pbox = PeriodicBox::from_corners((-1.6, -1.6, -0.6), (1.6, 1.6, 3.1));
-        let result = compute_tessellation_periodic(&balls, 1.0, &pbox);
+        let result = compute_tessellation_periodic(&balls, 1.0, &pbox, None);
 
         // C++ produces 64 contacts in periodic mode (more than basic mode's 44)
         // (contacts include self-contacts through periodic boundaries)
@@ -835,7 +871,7 @@ mod tests {
 
         // Periodic box: corners (0,0,0) to (200,250,300)
         let pbox = PeriodicBox::from_corners((0.0, 0.0, 0.0), (200.0, 250.0, 300.0));
-        let result = compute_tessellation_periodic(&balls, 2.0, &pbox);
+        let result = compute_tessellation_periodic(&balls, 2.0, &pbox, None);
 
         // C++ expected: 189 contacts (vs 153 non-periodic), 100 cells
         assert_approx!(
@@ -857,5 +893,80 @@ mod tests {
         // C++ expected total volume: 45173.2 (vs 46419.9 non-periodic)
         let total_vol: f64 = result.cells.iter().map(|c| c.volume).sum();
         assert_approx!(total_vol, 45173.2, 100.0, "total periodic volume");
+    }
+
+    /// Test grouping: contacts between spheres in same group are excluded
+    #[test]
+    fn test_grouping_excludes_same_group() {
+        let balls = vec![
+            Ball::new(0.0, 0.0, 0.0, 1.0),
+            Ball::new(2.0, 0.0, 0.0, 1.0),
+            Ball::new(4.0, 0.0, 0.0, 1.0),
+        ];
+
+        // Without grouping: 2 contacts (0-1 and 1-2)
+        let result_no_groups = compute_tessellation(&balls, 0.5, None);
+        assert_eq!(result_no_groups.contacts.len(), 2);
+
+        // All in same group: 0 contacts
+        let groups_same = vec![0, 0, 0];
+        let result_same = compute_tessellation(&balls, 0.5, Some(&groups_same));
+        assert_eq!(result_same.contacts.len(), 0);
+
+        // 0 and 1 in group 0, 2 in group 1: only 1 contact (1-2)
+        let groups_partial = vec![0, 0, 1];
+        let result_partial = compute_tessellation(&balls, 0.5, Some(&groups_partial));
+        assert_eq!(result_partial.contacts.len(), 1);
+        assert_eq!(result_partial.contacts[0].id_a, 1);
+        assert_eq!(result_partial.contacts[0].id_b, 2);
+    }
+
+    /// Test grouping with periodic boundary conditions
+    #[test]
+    fn test_grouping_periodic() {
+        use crate::types::PeriodicBox;
+
+        let balls = vec![
+            Ball::new(0.0, 0.0, 2.0, 1.0),
+            Ball::new(0.0, 1.0, 0.0, 0.5),
+            Ball::new(0.382683, 0.92388, 0.0, 0.5),
+        ];
+
+        let pbox = PeriodicBox::from_corners((-2.0, -2.0, -1.0), (2.0, 2.0, 4.0));
+
+        // Without grouping
+        let result_no_groups = compute_tessellation_periodic(&balls, 1.0, &pbox, None);
+        let contacts_no_groups = result_no_groups.contacts.len();
+
+        // All in same group: should have fewer/no contacts
+        let groups_same = vec![0, 0, 0];
+        let result_same = compute_tessellation_periodic(&balls, 1.0, &pbox, Some(&groups_same));
+        assert!(
+            result_same.contacts.len() < contacts_no_groups,
+            "same group should reduce contacts"
+        );
+    }
+
+    /// Test grouping with mixed groups - some contacts remain
+    #[test]
+    fn test_grouping_mixed_groups() {
+        let balls = vec![
+            Ball::new(0.0, 0.0, 0.0, 1.0),
+            Ball::new(2.0, 0.0, 0.0, 1.0),
+            Ball::new(4.0, 0.0, 0.0, 1.0),
+            Ball::new(6.0, 0.0, 0.0, 1.0),
+        ];
+
+        // Groups: 0,0,1,1 - contacts only between groups (1-2)
+        let groups = vec![0, 0, 1, 1];
+        let result = compute_tessellation(&balls, 0.5, Some(&groups));
+
+        // Only contact between balls 1 and 2 (different groups, adjacent)
+        assert_eq!(result.contacts.len(), 1);
+        assert_eq!(result.contacts[0].id_a, 1);
+        assert_eq!(result.contacts[0].id_b, 2);
+
+        // Cells are computed for spheres with contacts
+        assert_eq!(result.cells.len(), 2);
     }
 }

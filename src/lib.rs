@@ -15,7 +15,7 @@
 //!     Ball::new(1.5, 2.5, 0.0, 1.5),
 //! ];
 //!
-//! let result = compute_tessellation(&balls, 1.4);
+//! let result = compute_tessellation(&balls, 1.4, None);
 //!
 //! for contact in &result.contacts {
 //!     println!("Contact {}-{}: area={:.2}", contact.id_a, contact.id_b, contact.area);

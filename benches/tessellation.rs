@@ -44,7 +44,7 @@ fn bench_tessellation(c: &mut Criterion) {
 
         group.throughput(Throughput::Elements(n as u64));
         group.bench_with_input(BenchmarkId::new("compute", name), &balls, |b, balls| {
-            b.iter(|| compute_tessellation(black_box(balls), black_box(probe)));
+            b.iter(|| compute_tessellation(black_box(balls), black_box(probe), None));
         });
     }
 
@@ -62,12 +62,47 @@ fn bench_tessellation_periodic(c: &mut Criterion) {
 
     group.bench_function("compute/balls_cs_1x1", |b| {
         b.iter(|| {
-            compute_tessellation_periodic(black_box(&balls), black_box(probe), black_box(&pbox))
+            compute_tessellation_periodic(
+                black_box(&balls),
+                black_box(probe),
+                black_box(&pbox),
+                None,
+            )
         });
     });
 
     group.finish();
 }
 
-criterion_group!(benches, bench_tessellation, bench_tessellation_periodic);
+fn bench_tessellation_with_groups(c: &mut Criterion) {
+    // Use balls_2zsk (3545 balls) - assign groups in blocks of 10
+    let balls = load_balls("balls_2zsk");
+    let probe = 1.4;
+    let n = balls.len();
+
+    // Create groups: every 10 balls belong to the same group
+    let groups: Vec<i32> = (0..n).map(|i| (i / 10) as i32).collect();
+
+    let mut group = c.benchmark_group("tessellation_groups");
+    group.throughput(Throughput::Elements(n as u64));
+
+    group.bench_function("no_groups/balls_2zsk", |b| {
+        b.iter(|| compute_tessellation(black_box(&balls), black_box(probe), None));
+    });
+
+    group.bench_function("with_groups/balls_2zsk", |b| {
+        b.iter(|| {
+            compute_tessellation(black_box(&balls), black_box(probe), Some(black_box(&groups)))
+        });
+    });
+
+    group.finish();
+}
+
+criterion_group!(
+    benches,
+    bench_tessellation,
+    bench_tessellation_periodic,
+    bench_tessellation_with_groups
+);
 criterion_main!(benches);
