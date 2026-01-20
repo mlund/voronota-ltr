@@ -1,7 +1,7 @@
-# voronotalt
+# Rust Port of VoronotaLT
 
-Unofficial Rust port of [voronota-lt](https://github.com/kliment-olechnovic/voronota/tree/master/expansion_lt) (C++).
-
+Unofficial Rust port of [voronota-lt](https://github.com/kliment-olechnovic/voronota/tree/master/expansion_lt)
+originally written in C++.
 Computes radical Voronoi tessellation of atomic balls constrained inside a solvent-accessible surface.
 Outputs inter-atom contact areas, solvent accessible surface (SAS) areas, and volumes.
 
@@ -78,6 +78,18 @@ cat atoms.xyzr | voronotalt --probe 1.4
 
 Run `voronotalt --help` for all options.
 
+## Benchmarks
+
+Performance comparison with C++ voronota-lt on 9745 balls (probe=1.4):
+
+| Implementation | Single-threaded | Multi-threaded | Speedup |
+|----------------|-----------------|----------------|---------|
+| C++ voronota-lt (g++ -O3, OpenMP) | 187 ms | 42 ms | 4.5x |
+| Rust voronotalt (release, Rayon) | 177 ms | 31 ms | 5.7x |
+
+Run benchmarks with `cargo bench`.
+
 ## License
 
 MIT
+
