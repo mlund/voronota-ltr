@@ -15,7 +15,7 @@
 //!     Ball::new(1.5, 2.5, 0.0, 1.5),
 //! ];
 //!
-//! let result = compute_tessellation(&balls, 1.4, None);
+//! let result = compute_tessellation(&balls, 1.4, None, None);
 //!
 //! for contact in &result.contacts {
 //!     println!("Contact {}-{}: area={:.2}", contact.id_a, contact.id_b, contact.area);
@@ -32,5 +32,5 @@ mod spheres_searcher;
 mod tessellation;
 mod types;
 
-pub use tessellation::{compute_tessellation, compute_tessellation_periodic};
+pub use tessellation::compute_tessellation;
 pub use types::{Ball, Cell, Contact, PeriodicBox, TessellationResult};

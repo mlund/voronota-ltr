@@ -1,5 +1,5 @@
 use criterion::{BenchmarkId, Criterion, Throughput, black_box, criterion_group, criterion_main};
-use rust_voronota::{Ball, PeriodicBox, compute_tessellation, compute_tessellation_periodic};
+use rust_voronota::{Ball, PeriodicBox, compute_tessellation};
 use std::fs;
 
 /// Parse xyzr file - last 4 numeric columns are x, y, z, r
@@ -44,7 +44,7 @@ fn bench_tessellation(c: &mut Criterion) {
 
         group.throughput(Throughput::Elements(n as u64));
         group.bench_with_input(BenchmarkId::new("compute", name), &balls, |b, balls| {
-            b.iter(|| compute_tessellation(black_box(balls), black_box(probe), None));
+            b.iter(|| compute_tessellation(black_box(balls), black_box(probe), None, None));
         });
     }
 
@@ -62,10 +62,10 @@ fn bench_tessellation_periodic(c: &mut Criterion) {
 
     group.bench_function("compute/balls_cs_1x1", |b| {
         b.iter(|| {
-            compute_tessellation_periodic(
+            compute_tessellation(
                 black_box(&balls),
                 black_box(probe),
-                black_box(&pbox),
+                Some(black_box(&pbox)),
                 None,
             )
         });
@@ -87,12 +87,12 @@ fn bench_tessellation_with_groups(c: &mut Criterion) {
     group.throughput(Throughput::Elements(n as u64));
 
     group.bench_function("no_groups/balls_2zsk", |b| {
-        b.iter(|| compute_tessellation(black_box(&balls), black_box(probe), None));
+        b.iter(|| compute_tessellation(black_box(&balls), black_box(probe), None, None));
     });
 
     group.bench_function("with_groups/balls_2zsk", |b| {
         b.iter(|| {
-            compute_tessellation(black_box(&balls), black_box(probe), Some(black_box(&groups)))
+            compute_tessellation(black_box(&balls), black_box(probe), None, Some(black_box(&groups)))
         });
     });
 
