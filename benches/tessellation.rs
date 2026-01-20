@@ -1,5 +1,5 @@
-use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
-use rust_voronota::{compute_tessellation, compute_tessellation_periodic, Ball, PeriodicBox};
+use criterion::{BenchmarkId, Criterion, Throughput, black_box, criterion_group, criterion_main};
+use rust_voronota::{Ball, PeriodicBox, compute_tessellation, compute_tessellation_periodic};
 use std::fs;
 
 /// Parse xyzr file - last 4 numeric columns are x, y, z, r
@@ -30,7 +30,7 @@ fn load_balls(name: &str) -> Vec<Ball> {
 
 fn bench_tessellation(c: &mut Criterion) {
     let datasets = [
-        ("balls_cs_1x1", 2.0),  // 100 balls, probe 2.0
+        ("balls_cs_1x1", 2.0), // 100 balls, probe 2.0
         ("balls_2zsk", 1.4),   // 3545 balls, probe 1.4
         ("balls_3dlb", 1.4),   // 9745 balls, probe 1.4
     ];

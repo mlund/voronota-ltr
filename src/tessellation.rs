@@ -192,7 +192,10 @@ fn populate_periodic_spheres(spheres: &[Sphere], pbox: &PeriodicBox) -> Vec<Sphe
 }
 
 /// Collect collision pairs for periodic case
-fn collect_periodic_collision_pairs(all_collisions: &[Vec<ValuedId>], n: usize) -> Vec<(usize, usize)> {
+fn collect_periodic_collision_pairs(
+    all_collisions: &[Vec<ValuedId>],
+    n: usize,
+) -> Vec<(usize, usize)> {
     let mut pairs = Vec::new();
 
     for (a_id, neighbors) in all_collisions.iter().enumerate() {
@@ -715,7 +718,10 @@ mod tests {
 
         // Check self-contact 0-0 exists (through periodic boundary)
         let self_contact = result.contacts.iter().find(|c| c.id_a == 0 && c.id_b == 0);
-        assert!(self_contact.is_some(), "self-contact 0-0 should exist in periodic");
+        assert!(
+            self_contact.is_some(),
+            "self-contact 0-0 should exist in periodic"
+        );
         let sc = self_contact.unwrap();
         assert_approx!(sc.area, 3.36258, 0.01, "self-contact 0-0 area");
     }
