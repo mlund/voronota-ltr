@@ -7,7 +7,7 @@
 //! # Example
 //!
 //! ```
-//! use rust_voronota::{Ball, compute_tessellation};
+//! use voronotalt::{Ball, compute_tessellation};
 //!
 //! let balls = vec![
 //!     Ball::new(0.0, 0.0, 0.0, 1.5),

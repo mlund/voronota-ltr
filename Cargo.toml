@@ -5,6 +5,7 @@ edition = "2024"
 license = "MIT"
 
 [dependencies]
+clap = { version = "4", features = ["derive"] }
 nalgebra = "0.33"
 rayon = "1.10"
 

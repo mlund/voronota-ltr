@@ -1,5 +1,5 @@
 use criterion::{BenchmarkId, Criterion, Throughput, black_box, criterion_group, criterion_main};
-use rust_voronota::{Ball, PeriodicBox, compute_tessellation};
+use voronotalt::{Ball, PeriodicBox, compute_tessellation};
 use std::fs;
 
 /// Parse xyzr file - last 4 numeric columns are x, y, z, r
