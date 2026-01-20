@@ -1,4 +1,4 @@
-use std::f64::consts::PI;
+use std::f64::consts::{FRAC_PI_3, PI, TAU};
 
 use nalgebra::{Point3, Vector3};
 
@@ -224,7 +224,7 @@ pub fn construct_contact_descriptor(
         // Full circle contact (no cuts)
         cd.axis = (b.center - a.center).normalize();
         cd.contour_barycenter = cd.intersection_circle.center;
-        cd.sum_of_arc_angles = 2.0 * PI;
+        cd.sum_of_arc_angles = TAU;
         cd.area = cd.intersection_circle.r * cd.intersection_circle.r * PI;
     } else if !cd.contour.is_empty() {
         restrict_contour_to_circle(
@@ -275,12 +275,12 @@ fn init_contour(contour: &mut Contour, a_id: usize, base: &Sphere, axis: &Vector
     // 1.19 ≈ 1/cos(30°): ensures hexagon vertices are outside the circle
     const HEXAGON_SCALE: f64 = 1.19;
     let first_point = any_normal_of_vector(axis) * base.r * HEXAGON_SCALE;
-    let angle_step = PI / 3.0;
+    let angle_step = FRAC_PI_3;
 
     contour.push(ContourPoint::new(base.center + first_point, a_id, a_id));
 
     let mut rotation_angle = angle_step;
-    while rotation_angle < 2.0 * PI {
+    while rotation_angle < TAU {
         let rotated = rotate_point_around_axis(axis, rotation_angle, &first_point);
         contour.push(ContourPoint::new(base.center + rotated, a_id, a_id));
         rotation_angle += angle_step;
@@ -581,10 +581,10 @@ fn restrict_contour_to_circle(
     }
 
     // If sum of arc angles >= 2π, the contour is a full circle
-    if float_cmp::ge(*sum_angles, 2.0 * PI)
-        || (contour.len() > 2 && float_cmp::eq(*sum_angles, 2.0 * PI))
+    if float_cmp::ge(*sum_angles, TAU)
+        || (contour.len() > 2 && float_cmp::eq(*sum_angles, TAU))
     {
-        *sum_angles = 2.0 * PI;
+        *sum_angles = TAU;
         contour.clear();
     }
 }
@@ -618,7 +618,7 @@ fn calculate_solid_angle(a: &Sphere, b: &Sphere, ic: &Sphere, contour: &Contour)
 
     if contour.is_empty() {
         // Full circle case
-        turn_angle = 2.0 * PI * (ic.center - a.center).norm() / a.r;
+        turn_angle = TAU * (ic.center - a.center).norm() / a.r;
     } else {
         for i in 0..contour.len() {
             let prev_i = if i > 0 { i - 1 } else { contour.len() - 1 };
@@ -651,7 +651,7 @@ fn calculate_solid_angle(a: &Sphere, b: &Sphere, ic: &Sphere, contour: &Contour)
         }
     }
 
-    let mut solid_angle = 2.0 * PI - turn_angle;
+    let mut solid_angle = TAU - turn_angle;
 
     // Check if contact is on far side of sphere a
     let ic_to_a = ic.center - a.center;

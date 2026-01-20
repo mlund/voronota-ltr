@@ -1,3 +1,6 @@
+use std::f64::consts::TAU;
+
+#[cfg(test)]
 use std::f64::consts::PI;
 
 use nalgebra::{Point3, Unit, UnitQuaternion, Vector3};
@@ -135,7 +138,7 @@ pub fn directed_angle(o: &Point3<f64>, a: &Point3<f64>, b: &Point3<f64>, c: &Poi
     if (c - o).dot(&n) >= 0.0 {
         angle
     } else {
-        2.0 * PI - angle
+        TAU - angle
     }
 }
 
