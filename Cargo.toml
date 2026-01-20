@@ -9,3 +9,8 @@ rayon = "1.10"
 
 [dev-dependencies]
 approx = "0.5"
+criterion = "0.5"
+
+[[bench]]
+name = "tessellation"
+harness = false
