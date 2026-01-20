@@ -7,20 +7,15 @@ Outputs inter-atom contact areas, solvent accessible surface (SAS) areas, and vo
 
 ## Benchmarks
 
-Rust voronotalt on Apple Silicon M4 (Arm), probe=1.4:
+Performance on Apple Silicon M4 (Arm):
 
-| Dataset      | Balls | Single-threaded | Rayon  | Speedup |
-|--------------|-------|-----------------|--------|---------|
-| balls_cs_1x1 | 100   | 63 µs           | 77 µs  | 0.8x    |
-| balls_2zsk   | 3545  | 69 ms           | 12 ms  | 5.8x    |
-| balls_3dlb   | 9745  | 180 ms          | 31 ms  | 5.8x    |
+| Dataset      | Balls | C++ (OpenMP) | Rust (Rayon) | C++ Speedup | Rust Speedup |
+|--------------|-------|--------------|--------------|-------------|--------------|
+| balls_cs_1x1 | 100   | 179 µs       | 79 µs        | 0.4x        | 0.8x         |
+| balls_2zsk   | 3545  | 14 ms        | 12 ms        | 5.1x        | 5.9x         |
+| balls_3dlb   | 9745  | 38 ms        | 30 ms        | 5.0x        | 5.9x         |
 
-Comparison with C++ voronota-lt on balls_3dlb (9745 balls):
-
-| Implementation                    | Single-threaded | Multi-threaded | Speedup |
-|-----------------------------------|-----------------|----------------|---------|
-| C++ voronota-lt (g++ -O3, OpenMP) | 187 ms          | 42 ms          | 4.5x    |
-| Rust voronotalt (release, Rayon)  | 180 ms          | 31 ms          | 5.8x    |
+Speedup is relative to single-threaded: C++ 71 µs / 72 ms / 189 ms, Rust 65 µs / 69 ms / 179 ms.
 
 ## Installation
 

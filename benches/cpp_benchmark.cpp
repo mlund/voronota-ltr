@@ -166,21 +166,15 @@ int main(int argc, char* argv[]) {
 #endif
     std::cout << std::string(60, '-') << std::endl;
 
-    // Focus on largest dataset
+    std::cout << "balls_cs_1x1: " << balls_cs_1x1.size() << " balls" << std::endl;
+    std::cout << "balls_2zsk: " << balls_2zsk.size() << " balls" << std::endl;
     std::cout << "balls_3dlb: " << balls_3dlb.size() << " balls" << std::endl;
+    std::cout << std::string(60, '-') << std::endl;
 
-    // Verify correctness
-    {
-        voronotalt::RadicalTessellation::Result result;
-        voronotalt::RadicalTessellation::construct_full_tessellation(
-            voronotalt::get_spheres_from_balls(balls_3dlb, 1.4),
-            voronotalt::PeriodicBox(),
-            result);
-        std::cout << "Contacts: " << result.contacts_summaries.size() << std::endl;
-        std::cout << "Cells: " << result.cells_summaries.size() << std::endl;
-    }
-
-    benchmark("balls_3dlb (10 runs)", balls_3dlb, 1.4, 10);
+    // Benchmark all datasets (use probe values matching Rust benchmarks)
+    benchmark("balls_cs_1x1", balls_cs_1x1, 2.0, 1000);
+    benchmark("balls_2zsk", balls_2zsk, 1.4, 10);
+    benchmark("balls_3dlb", balls_3dlb, 1.4, 10);
 
     return 0;
 }
