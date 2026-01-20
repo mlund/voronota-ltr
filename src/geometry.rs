@@ -1,90 +1,71 @@
 use std::f64::consts::PI;
 
-use nalgebra::{Point3, Vector3};
+use nalgebra::{Point3, Unit, UnitQuaternion, Vector3};
 
 use crate::types::Sphere;
 
+/// Tolerance for floating-point comparisons.
+/// This algorithm requires consistent epsilon across all comparisons
+/// to maintain geometric consistency (matching C++ voronota-lt behavior).
 pub const EPSILON: f64 = 1e-10;
-#[allow(dead_code)]
-pub const EPSILON_ROUGH: f64 = 1e-7;
 
-/// Epsilon-based equality check
-#[inline]
-pub fn equal(a: f64, b: f64) -> bool {
-    (a - b).abs() <= EPSILON
+/// Epsilon-based floating point comparisons.
+/// These exist because the tessellation algorithm requires consistent
+/// "fuzzy" comparisons to handle geometric degeneracies robustly.
+pub mod float_cmp {
+    use super::EPSILON;
+
+    #[inline]
+    pub fn eq(a: f64, b: f64) -> bool {
+        (a - b).abs() <= EPSILON
+    }
+
+    #[inline]
+    pub fn lt(a: f64, b: f64) -> bool {
+        a + EPSILON < b
+    }
+
+    #[inline]
+    pub fn gt(a: f64, b: f64) -> bool {
+        a - EPSILON > b
+    }
+
+    #[inline]
+    pub fn le(a: f64, b: f64) -> bool {
+        a < b + EPSILON
+    }
+
+    #[inline]
+    pub fn ge(a: f64, b: f64) -> bool {
+        a + EPSILON > b
+    }
 }
 
-#[allow(dead_code)]
-#[inline]
-pub fn equal_with_eps(a: f64, b: f64, eps: f64) -> bool {
-    (a - b).abs() <= eps
-}
-
-#[inline]
-pub fn less(a: f64, b: f64) -> bool {
-    a + EPSILON < b
-}
-
-#[inline]
-pub fn greater(a: f64, b: f64) -> bool {
-    a - EPSILON > b
-}
-
-#[inline]
-pub fn less_or_equal(a: f64, b: f64) -> bool {
-    less(a, b) || equal(a, b)
-}
-
-#[inline]
-pub fn greater_or_equal(a: f64, b: f64) -> bool {
-    greater(a, b) || equal(a, b)
-}
-
-#[inline]
-pub fn squared_distance(a: &Point3<f64>, b: &Point3<f64>) -> f64 {
-    (a - b).norm_squared()
-}
-
-#[inline]
-pub fn distance(a: &Point3<f64>, b: &Point3<f64>) -> f64 {
-    (a - b).norm()
-}
+use float_cmp::{eq, ge, gt, le, lt};
 
 #[inline]
 pub fn point_equals(a: &Point3<f64>, b: &Point3<f64>) -> bool {
-    equal(a.x, b.x) && equal(a.y, b.y) && equal(a.z, b.z)
-}
-
-/// Normalize vector, handling near-unit vectors
-#[inline]
-pub fn unit_vector(v: &Vector3<f64>) -> Vector3<f64> {
-    let sq_norm = v.norm_squared();
-    if equal(sq_norm, 1.0) {
-        *v
-    } else {
-        v / sq_norm.sqrt()
-    }
+    eq(a.x, b.x) && eq(a.y, b.y) && eq(a.z, b.z)
 }
 
 /// Check if two spheres intersect (overlap)
 #[inline]
 pub fn sphere_intersects_sphere(a: &Sphere, b: &Sphere) -> bool {
     let sum_r = a.r + b.r;
-    less(squared_distance(&a.center, &b.center), sum_r * sum_r)
+    lt((b.center - a.center).norm_squared(), sum_r * sum_r)
 }
 
 /// Check if spheres are equal
 #[inline]
 pub fn sphere_equals_sphere(a: &Sphere, b: &Sphere) -> bool {
-    equal(a.r, b.r) && point_equals(&a.center, &b.center)
+    eq(a.r, b.r) && point_equals(&a.center, &b.center)
 }
 
 /// Check if sphere `a` contains sphere `b`
 #[inline]
 pub fn sphere_contains_sphere(a: &Sphere, b: &Sphere) -> bool {
     let diff_r = a.r - b.r;
-    greater_or_equal(a.r, b.r)
-        && less_or_equal(squared_distance(&a.center, &b.center), diff_r * diff_r)
+    ge(a.r, b.r) && le((b.center - a.center).norm_squared(), diff_r * diff_r)
 }
 
 /// Signed distance from point to plane
@@ -94,7 +75,7 @@ pub fn signed_distance_to_plane(
     plane_normal: &Vector3<f64>,
     x: &Point3<f64>,
 ) -> f64 {
-    unit_vector(plane_normal).dot(&(x - plane_point))
+    plane_normal.normalize().dot(&(x - plane_point))
 }
 
 /// Determine which halfspace a point lies in relative to a plane
@@ -106,9 +87,9 @@ pub fn halfspace_of_point(
     x: &Point3<f64>,
 ) -> i32 {
     let sd = signed_distance_to_plane(plane_point, plane_normal, x);
-    if greater(sd, 0.0) {
+    if gt(sd, 0.0) {
         1
-    } else if less(sd, 0.0) {
+    } else if lt(sd, 0.0) {
         -1
     } else {
         0
@@ -140,17 +121,16 @@ pub fn triangle_area(a: &Point3<f64>, b: &Point3<f64>, c: &Point3<f64>) -> f64 {
 
 /// Minimum angle at vertex o between rays to a and b
 pub fn min_angle(o: &Point3<f64>, a: &Point3<f64>, b: &Point3<f64>) -> f64 {
-    let v1 = unit_vector(&(a - o));
-    let v2 = unit_vector(&(b - o));
-    let cos_val = v1.dot(&v2).clamp(-1.0, 1.0);
-    cos_val.acos()
+    let v1 = (a - o).normalize();
+    let v2 = (b - o).normalize();
+    v1.dot(&v2).clamp(-1.0, 1.0).acos()
 }
 
 /// Directed angle from ray oa to ray ob, using c to determine direction
 pub fn directed_angle(o: &Point3<f64>, a: &Point3<f64>, b: &Point3<f64>, c: &Point3<f64>) -> f64 {
     let angle = min_angle(o, a, b);
-    let v1 = unit_vector(&(a - o));
-    let v2 = unit_vector(&(b - o));
+    let v1 = (a - o).normalize();
+    let v2 = (b - o).normalize();
     let n = v1.cross(&v2);
     if (c - o).dot(&n) >= 0.0 {
         angle
@@ -164,13 +144,13 @@ pub fn any_normal_of_vector(a: &Vector3<f64>) -> Vector3<f64> {
     let mut b = *a;
 
     // Find a non-parallel vector to cross with
-    if !equal(b.x, 0.0) && (!equal(b.y, 0.0) || !equal(b.z, 0.0)) {
+    if !eq(b.x, 0.0) && (!eq(b.y, 0.0) || !eq(b.z, 0.0)) {
         b.x = -b.x;
-        return unit_vector(&a.cross(&b));
-    } else if !equal(b.y, 0.0) && (!equal(b.x, 0.0) || !equal(b.z, 0.0)) {
+        return a.cross(&b).normalize();
+    } else if !eq(b.y, 0.0) && (!eq(b.x, 0.0) || !eq(b.z, 0.0)) {
         b.y = -b.y;
-        return unit_vector(&a.cross(&b));
-    } else if !equal(b.x, 0.0) {
+        return a.cross(&b).normalize();
+    } else if !eq(b.x, 0.0) {
         return Vector3::new(0.0, 1.0, 0.0);
     }
     Vector3::new(1.0, 0.0, 0.0)
@@ -181,40 +161,14 @@ pub fn rotate_point_around_axis(axis: &Vector3<f64>, angle: f64, p: &Vector3<f64
     if axis.norm_squared() <= 0.0 {
         return *p;
     }
-
-    let half_angle = angle * 0.5;
-    let cos_half = half_angle.cos();
-    let sin_half = half_angle.sin();
-    let unit_axis = unit_vector(axis);
-
-    // Quaternion q1 = (cos(θ/2), sin(θ/2) * axis)
-    let q1 = (cos_half, unit_axis * sin_half);
-
-    // Point as quaternion q2 = (0, p)
-    let q2 = (0.0, *p);
-
-    // q1 * q2
-    let q1q2 = quaternion_product(q1, q2);
-
-    // q1^(-1) = (cos(θ/2), -sin(θ/2) * axis)
-    let q1_inv = (cos_half, -unit_axis * sin_half);
-
-    // (q1 * q2) * q1^(-1)
-    let result = quaternion_product(q1q2, q1_inv);
-
-    result.1
-}
-
-/// Quaternion multiplication: (a, v) * (b, w) = (ab - v·w, a*w + b*v + v×w)
-fn quaternion_product(q1: (f64, Vector3<f64>), q2: (f64, Vector3<f64>)) -> (f64, Vector3<f64>) {
-    let (a, v) = q1;
-    let (b, w) = q2;
-    (a * b - v.dot(&w), w * a + v * b + v.cross(&w))
+    let unit_axis = Unit::new_normalize(*axis);
+    let rotation = UnitQuaternion::from_axis_angle(&unit_axis, angle);
+    rotation * p
 }
 
 /// Distance from sphere a center to intersection circle center with sphere b
 pub fn distance_to_intersection_circle_center(a: &Sphere, b: &Sphere) -> f64 {
-    let cm = distance(&a.center, &b.center);
+    let cm = (b.center - a.center).norm();
     if cm < EPSILON {
         return 0.0;
     }
@@ -246,15 +200,15 @@ pub fn intersection_circle_of_two_spheres(a: &Sphere, b: &Sphere) -> Sphere {
     Sphere::new(center, a.r * sin_g)
 }
 
-/// Project point o onto line segment ab, return true if projection is inside segment
+/// Project point o onto line segment ab, return Some if projection is inside segment
 pub fn project_point_inside_line(
     o: &Point3<f64>,
     a: &Point3<f64>,
     b: &Point3<f64>,
 ) -> Option<Point3<f64>> {
-    let v = unit_vector(&(b - a));
+    let v = (b - a).normalize();
     let l = v.dot(&(o - a));
-    if l > 0.0 && l * l <= squared_distance(a, b) {
+    if l > 0.0 && l * l <= (b - a).norm_squared() {
         Some(a + v * l)
     } else {
         None
@@ -267,7 +221,7 @@ pub fn intersect_segment_with_circle(
     p_in: &Point3<f64>,
     p_out: &Point3<f64>,
 ) -> Option<Point3<f64>> {
-    let dist = distance(p_in, p_out);
+    let dist = (p_in - p_out).norm();
     if dist <= 0.0 {
         return None;
     }
@@ -275,7 +229,7 @@ pub fn intersect_segment_with_circle(
     let v = (p_in - p_out) / dist;
     let u = circle.center - p_out;
     let s = p_out + v * v.dot(&u);
-    let ll = circle.r * circle.r - squared_distance(&circle.center, &s);
+    let ll = circle.r * circle.r - (circle.center - s).norm_squared();
 
     if ll >= 0.0 {
         Some(s - v * ll.sqrt())
@@ -291,11 +245,10 @@ pub fn min_dihedral_angle(
     b1: &Point3<f64>,
     b2: &Point3<f64>,
 ) -> f64 {
-    let oa = unit_vector(&(a - o));
+    let oa = (a - o).normalize();
     let d1 = b1 - (o + oa * oa.dot(&(b1 - o)));
     let d2 = b2 - (o + oa * oa.dot(&(b2 - o)));
-    let cos_val = unit_vector(&d1).dot(&unit_vector(&d2)).clamp(-1.0, 1.0);
-    cos_val.acos()
+    d1.normalize().dot(&d2.normalize()).clamp(-1.0, 1.0).acos()
 }
 
 #[cfg(test)]

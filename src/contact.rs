@@ -3,11 +3,11 @@ use std::f64::consts::PI;
 use nalgebra::{Point3, Vector3};
 
 use crate::geometry::{
-    any_normal_of_vector, center_of_intersection_circle, directed_angle, distance, equal, greater,
-    greater_or_equal, halfspace_of_point, intersect_segment_with_circle,
-    intersection_circle_of_two_spheres, intersection_of_plane_and_segment, min_dihedral_angle,
-    project_point_inside_line, rotate_point_around_axis, signed_distance_to_plane,
-    sphere_contains_sphere, sphere_intersects_sphere, squared_distance, triangle_area, unit_vector,
+    any_normal_of_vector, center_of_intersection_circle, directed_angle, float_cmp,
+    halfspace_of_point, intersect_segment_with_circle, intersection_circle_of_two_spheres,
+    intersection_of_plane_and_segment, min_dihedral_angle, project_point_inside_line,
+    rotate_point_around_axis, signed_distance_to_plane, sphere_contains_sphere,
+    sphere_intersects_sphere, triangle_area,
 };
 use crate::types::{ContactDescriptorSummary, Sphere, ValuedId};
 
@@ -151,11 +151,12 @@ pub fn construct_contact_descriptor(
         }
 
         let ac_plane_center = center_of_intersection_circle(a, c);
-        let ac_plane_normal = unit_vector(&(c.center - a.center));
+        let ac_plane_normal = (c.center - a.center).normalize();
 
         // Check angle between intersection circles
-        let cos_val = unit_vector(&(cd.intersection_circle.center - a.center))
-            .dot(&unit_vector(&(ac_plane_center - a.center)));
+        let cos_val = (cd.intersection_circle.center - a.center)
+            .normalize()
+            .dot(&(ac_plane_center - a.center).normalize());
 
         if cos_val.abs() >= 1.0 {
             // Planes are parallel
@@ -194,7 +195,7 @@ pub fn construct_contact_descriptor(
 
         // Initialize contour if needed
         if !contour_initialized {
-            cd.axis = unit_vector(&(b.center - a.center));
+            cd.axis = (b.center - a.center).normalize();
             init_contour(&mut cd.contour, a_id, &cd.intersection_circle, &cd.axis);
             contour_initialized = true;
         } else if !test_contour_cuttable(&a.center, &ac_plane_center, &cd.contour) {
@@ -221,7 +222,7 @@ pub fn construct_contact_descriptor(
     // Finalize the contact descriptor
     if !contour_initialized {
         // Full circle contact (no cuts)
-        cd.axis = unit_vector(&(b.center - a.center));
+        cd.axis = (b.center - a.center).normalize();
         cd.contour_barycenter = cd.intersection_circle.center;
         cd.sum_of_arc_angles = 2.0 * PI;
         cd.area = cd.intersection_circle.r * cd.intersection_circle.r * PI;
@@ -255,11 +256,11 @@ pub fn construct_contact_descriptor(
     let sign_b = if cd.solid_angle_b < 0.0 { -1.0 } else { 1.0 };
 
     cd.pyramid_volume_a =
-        distance(&a.center, &cd.intersection_circle.center) * cd.area / 3.0 * sign_a;
+        (cd.intersection_circle.center - a.center).norm() * cd.area / 3.0 * sign_a;
     cd.pyramid_volume_b =
-        distance(&b.center, &cd.intersection_circle.center) * cd.area / 3.0 * sign_b;
+        (cd.intersection_circle.center - b.center).norm() * cd.area / 3.0 * sign_b;
 
-    cd.distance = distance(&a.center, &b.center);
+    cd.distance = (b.center - a.center).norm();
 
     Some(cd)
 }
@@ -292,10 +293,10 @@ fn test_contour_cuttable(
     closest_cut_point: &Point3<f64>,
     contour: &Contour,
 ) -> bool {
-    let threshold = squared_distance(a_center, closest_cut_point);
+    let threshold = (closest_cut_point - a_center).norm_squared();
     contour
         .iter()
-        .any(|cp| squared_distance(a_center, &cp.p) >= threshold)
+        .any(|cp| (cp.p - a_center).norm_squared() >= threshold)
 }
 
 /// Mark contour points that are on the outside of the cutting plane and cut
@@ -438,7 +439,7 @@ fn cut_contour(
     contour[end] = new_end;
 
     // Merge very close points
-    if !greater(squared_distance(&contour[start].p, &contour[end].p), 0.0) {
+    if !float_cmp::gt((contour[end].p - contour[start].p).norm_squared(), 0.0) {
         contour[start].right_id = contour[end].right_id;
         contour.remove(end);
     }
@@ -457,7 +458,7 @@ fn restrict_contour_to_circle(
     // Mark points inside/outside circle
     let mut outsiders = 0;
     for cp in contour.iter_mut() {
-        if squared_distance(&cp.p, &ic.center) <= ic.r * ic.r {
+        if (cp.p - ic.center).norm_squared() <= ic.r * ic.r {
             cp.indicator = 0;
         } else {
             cp.indicator = 1;
@@ -482,7 +483,7 @@ fn restrict_contour_to_circle(
                 // Both outside: check if segment crosses circle
                 if let Some(mp) =
                     project_point_inside_line(&ic.center, &contour[i].p, &contour[next_i].p)
-                    && squared_distance(&mp, &ic.center) <= ic.r * ic.r
+                    && (mp - ic.center).norm_squared() <= ic.r * ic.r
                     && let (Some(ip1), Some(ip2)) = (
                         intersect_segment_with_circle(ic, &mp, &contour[i].p),
                         intersect_segment_with_circle(ic, &mp, &contour[next_i].p),
@@ -580,8 +581,8 @@ fn restrict_contour_to_circle(
     }
 
     // If sum of arc angles >= 2π, the contour is a full circle
-    if greater_or_equal(*sum_angles, 2.0 * PI)
-        || (contour.len() > 2 && equal(*sum_angles, 2.0 * PI))
+    if float_cmp::ge(*sum_angles, 2.0 * PI)
+        || (contour.len() > 2 && float_cmp::eq(*sum_angles, 2.0 * PI))
     {
         *sum_angles = 2.0 * PI;
         contour.clear();
@@ -617,7 +618,7 @@ fn calculate_solid_angle(a: &Sphere, b: &Sphere, ic: &Sphere, contour: &Contour)
 
     if contour.is_empty() {
         // Full circle case
-        turn_angle = 2.0 * PI * distance(&a.center, &ic.center) / a.r;
+        turn_angle = 2.0 * PI * (ic.center - a.center).norm() / a.r;
     } else {
         for i in 0..contour.len() {
             let prev_i = if i > 0 { i - 1 } else { contour.len() - 1 };
@@ -643,7 +644,7 @@ fn calculate_solid_angle(a: &Sphere, b: &Sphere, ic: &Sphere, contour: &Contour)
                     d = -d;
                 }
                 turn_angle += PI - min_dihedral_angle(&a.center, &pr1.p, &pr0.p, &(pr1.p + d));
-                turn_angle += pr1.angle * (distance(&a.center, &ic.center) / a.r);
+                turn_angle += pr1.angle * ((ic.center - a.center).norm() / a.r);
             } else {
                 turn_angle += PI - min_dihedral_angle(&a.center, &pr1.p, &pr0.p, &pr2.p);
             }
@@ -656,7 +657,7 @@ fn calculate_solid_angle(a: &Sphere, b: &Sphere, ic: &Sphere, contour: &Contour)
     let ic_to_a = ic.center - a.center;
     let ic_to_b = ic.center - b.center;
     if ic_to_a.dot(&ic_to_b) > 0.0
-        && squared_distance(&ic.center, &a.center) < squared_distance(&ic.center, &b.center)
+        && (a.center - ic.center).norm_squared() < (b.center - ic.center).norm_squared()
     {
         solid_angle = -solid_angle;
     }
