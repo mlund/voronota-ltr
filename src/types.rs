@@ -10,7 +10,7 @@ pub struct Ball {
 }
 
 impl Ball {
-    pub fn new(x: f64, y: f64, z: f64, r: f64) -> Self {
+    pub const fn new(x: f64, y: f64, z: f64, r: f64) -> Self {
         Self { x, y, z, r }
     }
 }
@@ -68,7 +68,7 @@ pub struct ValuedId {
 }
 
 impl ValuedId {
-    pub fn new(value: f64, index: usize) -> Self {
+    pub const fn new(value: f64, index: usize) -> Self {
         Self { value, index }
     }
 }
@@ -113,7 +113,7 @@ pub struct PeriodicBox {
 
 impl PeriodicBox {
     /// Create from two corner points (axis-aligned box)
-    pub fn from_corners(min: (f64, f64, f64), max: (f64, f64, f64)) -> Self {
+    pub const fn from_corners(min: (f64, f64, f64), max: (f64, f64, f64)) -> Self {
         Self {
             shift_a: Vector3::new(max.0 - min.0, 0.0, 0.0),
             shift_b: Vector3::new(0.0, max.1 - min.1, 0.0),
@@ -122,7 +122,7 @@ impl PeriodicBox {
     }
 
     /// Create from three shift direction vectors (for non-orthogonal boxes)
-    pub fn from_vectors(a: (f64, f64, f64), b: (f64, f64, f64), c: (f64, f64, f64)) -> Self {
+    pub const fn from_vectors(a: (f64, f64, f64), b: (f64, f64, f64), c: (f64, f64, f64)) -> Self {
         Self {
             shift_a: Vector3::new(a.0, a.1, a.2),
             shift_b: Vector3::new(b.0, b.1, b.2),

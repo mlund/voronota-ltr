@@ -19,27 +19,27 @@ pub mod float_cmp {
     use super::EPSILON;
 
     #[inline]
-    pub fn eq(a: f64, b: f64) -> bool {
+    pub const fn eq(a: f64, b: f64) -> bool {
         (a - b).abs() <= EPSILON
     }
 
     #[inline]
-    pub fn lt(a: f64, b: f64) -> bool {
+    pub const fn lt(a: f64, b: f64) -> bool {
         a + EPSILON < b
     }
 
     #[inline]
-    pub fn gt(a: f64, b: f64) -> bool {
+    pub const fn gt(a: f64, b: f64) -> bool {
         a - EPSILON > b
     }
 
     #[inline]
-    pub fn le(a: f64, b: f64) -> bool {
+    pub const fn le(a: f64, b: f64) -> bool {
         a < b + EPSILON
     }
 
     #[inline]
-    pub fn ge(a: f64, b: f64) -> bool {
+    pub const fn ge(a: f64, b: f64) -> bool {
         a + EPSILON > b
     }
 }
