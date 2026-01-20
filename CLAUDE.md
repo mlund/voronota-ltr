@@ -1,0 +1,6 @@
+- C++ voronota-lt is in `/Users/mikael/github/voronota/expansion_lt/` (cmake project)
+- Avoid lenghty Rust functions
+- Reduce nested code with helper functions
+- Prefer *why* over *what* in code comments
+- For git commits and pull requests, be brief and don't add (co)-authorship
+- In tests, use macros to reduce repeated code

@@ -1,0 +1,11 @@
+[package]
+name = "rust-voronota"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+nalgebra = "0.33"
+rayon = "1.10"
+
+[dev-dependencies]
+approx = "0.5"
