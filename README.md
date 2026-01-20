@@ -7,15 +7,13 @@ Outputs inter-atom contact areas, solvent accessible surface (SAS) areas, and vo
 
 ## Benchmarks
 
-Performance on Apple Silicon M4 (Arm):
+Performance on Apple Silicon M4 (10 cores); the speedup is relative to single threaded runs.
 
-| Dataset      | Balls | C++ (OpenMP) | Rust (Rayon) | C++ Speedup | Rust Speedup |
-|--------------|-------|--------------|--------------|-------------|--------------|
-| balls_cs_1x1 | 100   | 179 µs       | 79 µs        | 0.4x        | 0.8x         |
-| balls_2zsk   | 3545  | 14 ms        | 12 ms        | 5.1x        | 5.9x         |
-| balls_3dlb   | 9745  | 38 ms        | 30 ms        | 5.0x        | 5.9x         |
-
-Speedup is relative to single-threaded: C++ 71 µs / 72 ms / 189 ms, Rust 65 µs / 69 ms / 179 ms.
+| Dataset        | Balls | C++ (OpenMP) | Rust (Rayon) | C++ Speedup | Rust Speedup |
+|----------------|-------|--------------|--------------|-------------|--------------|
+| `balls_cs_1x1` | 100   | 179 µs       | 79 µs        | 0.4x        | 0.8x         |
+| `balls_2zsk`   | 3545  | 14 ms        | 12 ms        | 5.1x        | 5.9x         |
+| `balls_3dlb`   | 9745  | 38 ms        | 30 ms        | 5.0x        | 5.9x         |
 
 ## Installation
 
