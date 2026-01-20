@@ -581,9 +581,7 @@ fn restrict_contour_to_circle(
     }
 
     // If sum of arc angles >= 2π, the contour is a full circle
-    if float_cmp::ge(*sum_angles, TAU)
-        || (contour.len() > 2 && float_cmp::eq(*sum_angles, TAU))
-    {
+    if float_cmp::ge(*sum_angles, TAU) || (contour.len() > 2 && float_cmp::eq(*sum_angles, TAU)) {
         *sum_angles = TAU;
         contour.clear();
     }

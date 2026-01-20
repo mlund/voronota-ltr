@@ -92,7 +92,12 @@ fn bench_tessellation_with_groups(c: &mut Criterion) {
 
     group.bench_function("with_groups/balls_2zsk", |b| {
         b.iter(|| {
-            compute_tessellation(black_box(&balls), black_box(probe), None, Some(black_box(&groups)))
+            compute_tessellation(
+                black_box(&balls),
+                black_box(probe),
+                None,
+                Some(black_box(&groups)),
+            )
         });
     });
 
