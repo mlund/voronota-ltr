@@ -204,4 +204,65 @@ mod tests {
         assert!(result.contacts.is_empty());
         assert!(result.cells.is_empty());
     }
+
+    /// Test matching C++ voronota-lt API example (basic mode, no periodic box)
+    /// Input: 17 balls arranged in a ring pattern, probe=1.0
+    /// Expected values from C++ output
+    #[test]
+    fn test_cpp_api_example_basic() {
+        let balls = vec![
+            Ball::new(0.0, 0.0, 2.0, 1.0),
+            Ball::new(0.0, 1.0, 0.0, 0.5),
+            Ball::new(0.382683, 0.92388, 0.0, 0.5),
+            Ball::new(0.707107, 0.707107, 0.0, 0.5),
+            Ball::new(0.92388, 0.382683, 0.0, 0.5),
+            Ball::new(1.0, 0.0, 0.0, 0.5),
+            Ball::new(0.92388, -0.382683, 0.0, 0.5),
+            Ball::new(0.707107, -0.707107, 0.0, 0.5),
+            Ball::new(0.382683, -0.92388, 0.0, 0.5),
+            Ball::new(0.0, -1.0, 0.0, 0.5),
+            Ball::new(-0.382683, -0.92388, 0.0, 0.5),
+            Ball::new(-0.707107, -0.707107, 0.0, 0.5),
+            Ball::new(-0.92388, -0.382683, 0.0, 0.5),
+            Ball::new(-1.0, 0.0, 0.0, 0.5),
+            Ball::new(-0.92388, 0.382683, 0.0, 0.5),
+            Ball::new(-0.707107, 0.707107, 0.0, 0.5),
+            Ball::new(-0.382683, 0.92388, 0.0, 0.5),
+        ];
+
+        let result = compute_tessellation(&balls, 1.0);
+
+        // C++ produces 44 contacts in basic mode
+        assert_eq!(result.contacts.len(), 44);
+
+        // All 17 balls should have cells
+        assert_eq!(result.cells.len(), 17);
+
+        // Check cell 0 (central large ball) - C++ expects ~34.82 SAS area, ~29.23 volume
+        let cell0 = result.cells.iter().find(|c| c.index == 0).unwrap();
+        assert_relative_eq!(cell0.sas_area, 34.8168, epsilon = 0.01);
+        assert_relative_eq!(cell0.volume, 29.2302, epsilon = 0.01);
+
+        // Check one of the small ring balls (cell 1) - C++ expects ~3.29 SAS area, ~2.48 volume
+        let cell1 = result.cells.iter().find(|c| c.index == 1).unwrap();
+        assert_relative_eq!(cell1.sas_area, 3.29195, epsilon = 0.01);
+        assert_relative_eq!(cell1.volume, 2.48022, epsilon = 0.01);
+
+        // Check contact 0-1 area - C++ expects ~0.7477
+        let contact_0_1 = result
+            .contacts
+            .iter()
+            .find(|c| c.id_a == 0 && c.id_b == 1)
+            .unwrap();
+        assert_relative_eq!(contact_0_1.area, 0.747721, epsilon = 0.001);
+        assert_relative_eq!(contact_0_1.arc_length, 0.726907, epsilon = 0.001);
+
+        // Check contact 1-2 (adjacent small balls) - C++ expects ~5.02
+        let contact_1_2 = result
+            .contacts
+            .iter()
+            .find(|c| c.id_a == 1 && c.id_b == 2)
+            .unwrap();
+        assert_relative_eq!(contact_1_2.area, 5.0216, epsilon = 0.01);
+    }
 }
