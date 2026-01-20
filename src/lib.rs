@@ -32,5 +32,5 @@ mod spheres_searcher;
 mod tessellation;
 mod types;
 
-pub use tessellation::compute_tessellation;
-pub use types::{Ball, Cell, Contact, TessellationResult};
+pub use tessellation::{compute_tessellation, compute_tessellation_periodic};
+pub use types::{Ball, Cell, Contact, PeriodicBox, TessellationResult};

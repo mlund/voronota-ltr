@@ -1,4 +1,4 @@
-use nalgebra::Point3;
+use nalgebra::{Point3, Vector3};
 
 /// Input ball (center + radius), user-facing type
 #[derive(Debug, Clone, Copy)]
@@ -101,6 +101,46 @@ impl Ord for ValuedId {
 pub struct TessellationResult {
     pub contacts: Vec<Contact>,
     pub cells: Vec<Cell>,
+}
+
+/// Periodic boundary box defined by three shift vectors
+#[derive(Debug, Clone, Copy, Default)]
+pub struct PeriodicBox {
+    pub shift_a: Vector3<f64>,
+    pub shift_b: Vector3<f64>,
+    pub shift_c: Vector3<f64>,
+}
+
+impl PeriodicBox {
+    /// Create from two corner points (axis-aligned box)
+    pub fn from_corners(min: (f64, f64, f64), max: (f64, f64, f64)) -> Self {
+        Self {
+            shift_a: Vector3::new(max.0 - min.0, 0.0, 0.0),
+            shift_b: Vector3::new(0.0, max.1 - min.1, 0.0),
+            shift_c: Vector3::new(0.0, 0.0, max.2 - min.2),
+        }
+    }
+
+    /// Create from three shift direction vectors (for non-orthogonal boxes)
+    pub fn from_vectors(a: (f64, f64, f64), b: (f64, f64, f64), c: (f64, f64, f64)) -> Self {
+        Self {
+            shift_a: Vector3::new(a.0, a.1, a.2),
+            shift_b: Vector3::new(b.0, b.1, b.2),
+            shift_c: Vector3::new(c.0, c.1, c.2),
+        }
+    }
+
+    /// Shift a sphere by weighted direction vectors
+    pub(crate) fn shift_sphere(&self, s: &Sphere, wa: f64, wb: f64, wc: f64) -> Sphere {
+        Sphere {
+            center: Point3::new(
+                s.center.x + self.shift_a.x * wa + self.shift_b.x * wb + self.shift_c.x * wc,
+                s.center.y + self.shift_a.y * wa + self.shift_b.y * wb + self.shift_c.y * wc,
+                s.center.z + self.shift_a.z * wa + self.shift_b.z * wb + self.shift_c.z * wc,
+            ),
+            r: s.r,
+        }
+    }
 }
 
 /// Internal contact descriptor summary (matches C++ ContactDescriptorSummary)
