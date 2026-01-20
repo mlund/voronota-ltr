@@ -5,6 +5,23 @@ originally written in C++.
 Computes radical Voronoi tessellation of atomic balls constrained inside a solvent-accessible surface.
 Outputs inter-atom contact areas, solvent accessible surface (SAS) areas, and volumes.
 
+## Benchmarks
+
+Rust voronotalt on Apple Silicon M4 (Arm), probe=1.4:
+
+| Dataset      | Balls | Single-threaded | Rayon  | Speedup |
+|--------------|-------|-----------------|--------|---------|
+| balls_cs_1x1 | 100   | 63 µs           | 77 µs  | 0.8x    |
+| balls_2zsk   | 3545  | 69 ms           | 12 ms  | 5.8x    |
+| balls_3dlb   | 9745  | 180 ms          | 31 ms  | 5.8x    |
+
+Comparison with C++ voronota-lt on balls_3dlb (9745 balls):
+
+| Implementation                    | Single-threaded | Multi-threaded | Speedup |
+|-----------------------------------|-----------------|----------------|---------|
+| C++ voronota-lt (g++ -O3, OpenMP) | 187 ms          | 42 ms          | 4.5x    |
+| Rust voronotalt (release, Rayon)  | 180 ms          | 31 ms          | 5.8x    |
+
 ## Installation
 
 ### Library
@@ -77,15 +94,6 @@ cat atoms.xyzr | voronotalt --probe 1.4
 ```
 
 Run `voronotalt --help` for all options.
-
-## Benchmarks
-
-Performance comparison with C++ voronota-lt on 9745 balls (probe=1.4):
-
-| Implementation | Single-threaded | Multi-threaded | Speedup |
-|----------------|-----------------|----------------|---------|
-| C++ voronota-lt (g++ -O3, OpenMP) | 187 ms | 42 ms | 4.5x |
-| Rust voronotalt (release, Rayon) | 177 ms | 31 ms | 5.7x |
 
 Run benchmarks with `cargo bench`.
 
