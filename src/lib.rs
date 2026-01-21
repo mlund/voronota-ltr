@@ -28,12 +28,15 @@
 
 mod contact;
 mod geometry;
+mod solvent_spheres;
 mod spheres_container;
 mod spheres_searcher;
+mod subdivided_icosahedron;
 mod tessellation;
 mod types;
 mod updateable;
 
+pub use solvent_spheres::{SolventSphere, SolventSpheresParams, compute_solvent_spheres};
 pub use tessellation::compute_tessellation;
 pub use types::{Ball, Cell, Contact, PeriodicBox, TessellationResult};
 pub use updateable::{UpdateableResult, UpdateableTessellation};

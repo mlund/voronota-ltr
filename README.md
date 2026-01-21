@@ -14,6 +14,7 @@ Outputs inter-atom contact areas, solvent accessible surface (SAS) areas, and vo
 - [x] Parallel processing using Rayon - see benchmarks below
 - [x] Unit-tests and benchmarks carried over from the C++ side
 - [x] Pure, safe Rust
+- Based on Voronota-LT v1.1.479 (`f5ad92de4e9723ab767db3e5035c0e7532f31595`)
 
 ## Installation
 
