@@ -39,6 +39,59 @@ Testing with `-C target-cpu=native`:
 
 Only the smallest dataset shows improvement, suggesting larger workloads are memory-bound.
 
+## LLVM Auto-Vectorization Analysis
+
+Inspecting LLVM vectorization remarks with:
+```sh
+RUSTFLAGS="-C target-cpu=native -C llvm-args=-pass-remarks=loop-vectorize \
+  -C llvm-args=-pass-remarks-missed=loop-vectorize" cargo build --release
+```
+
+Results: 123 loops vectorized, ~7000 loops not vectorized.
+
+Top reasons for failed vectorization:
+| Reason | Count |
+|--------|-------|
+| Control flow cannot be substituted for a select | 596 |
+| Cannot vectorize early exit loop | 641 |
+| Value used outside loop (reduction issue) | 503 |
+| Could not determine iteration count | 417 |
+
+Assembly inspection shows LLVM already uses ARM NEON for Point3 operations (`.2d` instructions for 2-wide double ops). The plane normal normalization in `mark_and_cut_contour` is hoisted out of the loop.
+
+## Branchless Code Experiment
+
+Tested converting `mark_contour` from branchy to branchless:
+
+```rust
+// Original (branchy)
+if halfspace_of_point(...) >= 0 {
+    cp.left_id = c_id;
+    cp.right_id = c_id;
+    count += 1;
+}
+
+// Branchless attempt
+let outside = (sd >= -EPSILON) as usize;
+cp.left_id = outside * c_id + (1 - outside) * cp.left_id;
+cp.right_id = outside * c_id + (1 - outside) * cp.right_id;
+count += outside;
+```
+
+Single-threaded benchmark results:
+
+| Dataset | Branchy | Branchless | Change |
+|---------|---------|------------|--------|
+| balls_cs_1x1 (100) | 78 µs | 61 µs | -22% ✓ |
+| balls_2zsk (3545) | 11 ms | 67 ms | +509% ✗ |
+| balls_3dlb (9745) | 29 ms | 177 ms | +510% ✗ |
+
+**Conclusion**: Branchless is 6x slower on real workloads because:
+1. Unconditional memory writes hurt more than conditional stores
+2. Extra arithmetic (multiply, add) per iteration
+3. Branch prediction works well for geometric patterns
+4. LLVM's decision to reject `select` substitution was correct
+
 ## SIMD Optimization Potential
 
 Analyzed using the `wide` crate for explicit SIMD:
@@ -197,6 +250,8 @@ collision_pairs[] ◄──────────────────┘
 2. **Rayon parallelization is effective**: 5.9x speedup vs 5.0x for C++ OpenMP
 3. **Memory allocation is efficient**: Low overhead from parallel collection
 4. **Skip SIMD refactoring**: Effort outweighs potential gains given the algorithm's control flow
+5. **Keep branchy code**: LLVM's branch-based codegen outperforms branchless alternatives
+6. **Trust LLVM's vectorization decisions**: When it says "control flow cannot be substituted for select", it's usually right
 
 ## Profiling Commands
 
