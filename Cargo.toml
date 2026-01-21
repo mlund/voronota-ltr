@@ -4,20 +4,25 @@ version = "0.1.0"
 edition = "2024"
 license = "MIT"
 authors = ["Kliment Olechnovic", "Mikael Lund"]
+readme = "README.md"
+categories = ["science"]
+homepage = "https://www.voronota.com/expansion_lt"
+repository = "https://github.com/mlund/voronota-ltr"
+keywords = ["voronoi-tessellation", "surface-area", "molecules"]
 
 [features]
 default = ["serde"]
 serde = ["dep:serde", "nalgebra/serde-serialize"]
 
 [dependencies]
-clap = { version = "4", features = ["derive"] }
-nalgebra = "0.33"
-rayon = "1.10"
+clap = { version = "4.5", features = ["derive"] }
+nalgebra = "0.34"
+rayon = "1.11"
 serde = { version = "1", features = ["derive"], optional = true }
 
 [dev-dependencies]
 approx = "0.5"
-criterion = "0.5"
+criterion = "0.8"
 
 [[bench]]
 name = "tessellation"
