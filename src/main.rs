@@ -3,10 +3,10 @@ use std::io::{self, BufRead, BufReader, Write};
 use std::path::PathBuf;
 
 use clap::Parser;
-use voronotalt::{Ball, PeriodicBox, compute_tessellation};
+use voronota_ltr::{Ball, PeriodicBox, compute_tessellation};
 
 #[derive(Parser)]
-#[command(name = "voronotalt")]
+#[command(name = "voronota_ltr")]
 #[command(about = "Compute radical Voronoi tessellation of atomic balls")]
 #[command(
     long_about = "Constructs a radical Voronoi tessellation of atomic balls \
@@ -58,7 +58,7 @@ fn parse_balls(reader: impl BufRead) -> Vec<Ball> {
         .collect()
 }
 
-fn write_contacts(out: &mut impl Write, contacts: &[voronotalt::Contact]) -> io::Result<()> {
+fn write_contacts(out: &mut impl Write, contacts: &[voronota_ltr::Contact]) -> io::Result<()> {
     for c in contacts {
         writeln!(
             out,
@@ -69,14 +69,17 @@ fn write_contacts(out: &mut impl Write, contacts: &[voronotalt::Contact]) -> io:
     Ok(())
 }
 
-fn write_cells(out: &mut impl Write, cells: &[voronotalt::Cell]) -> io::Result<()> {
+fn write_cells(out: &mut impl Write, cells: &[voronota_ltr::Cell]) -> io::Result<()> {
     for c in cells {
         writeln!(out, "{} {:.6} {:.6}", c.index, c.sas_area, c.volume)?;
     }
     Ok(())
 }
 
-fn write_summary(out: &mut impl Write, result: &voronotalt::TessellationResult) -> io::Result<()> {
+fn write_summary(
+    out: &mut impl Write,
+    result: &voronota_ltr::TessellationResult,
+) -> io::Result<()> {
     let total_contact_area: f64 = result.contacts.iter().map(|c| c.area).sum();
     let total_sas_area: f64 = result.cells.iter().map(|c| c.sas_area).sum();
     let total_volume: f64 = result.cells.iter().map(|c| c.volume).sum();

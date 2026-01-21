@@ -2,7 +2,7 @@ use std::io::Write;
 use std::process::{Command, Stdio};
 
 fn binary() -> Command {
-    Command::new(env!("CARGO_BIN_EXE_voronotalt"))
+    Command::new(env!("CARGO_BIN_EXE_voronota-ltr"))
 }
 
 fn assert_approx(name: &str, actual: f64, expected: f64, tolerance: f64) {

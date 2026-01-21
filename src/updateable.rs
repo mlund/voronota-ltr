@@ -4,6 +4,8 @@
 //! incremental updates when only a subset of spheres change.
 
 use rayon::prelude::*;
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
 
 use crate::contact::construct_contact_descriptor;
 use crate::spheres_container::SpheresContainer;
@@ -14,10 +16,12 @@ use crate::types::{
 
 /// Result of updateable tessellation with per-sphere contact storage.
 #[derive(Debug, Clone, Default)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct UpdateableResult {
     /// Cell summaries for each sphere
     pub cells: Vec<Cell>,
     /// Contacts organized by sphere ID (internal representation)
+    #[cfg_attr(feature = "serde", serde(skip))]
     pub(crate) contacts_by_sphere: Vec<Vec<ContactDescriptorSummary>>,
 }
 
@@ -80,7 +84,7 @@ impl State {
 /// # Example
 ///
 /// ```
-/// use voronotalt::{Ball, UpdateableTessellation};
+/// use voronota_ltr::{Ball, UpdateableTessellation};
 ///
 /// let mut balls = vec![
 ///     Ball::new(0.0, 0.0, 0.0, 1.0),

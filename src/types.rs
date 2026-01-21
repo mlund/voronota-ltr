@@ -1,7 +1,10 @@
 use nalgebra::{Point3, Vector3};
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
 
 /// Input ball (center + radius), user-facing type
 #[derive(Debug, Clone, Copy, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Ball {
     pub x: f64,
     pub y: f64,
@@ -47,6 +50,7 @@ impl Sphere {
 
 /// Contact between two spheres
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Contact {
     pub id_a: usize,
     pub id_b: usize,
@@ -56,6 +60,7 @@ pub struct Contact {
 
 /// Cell (Voronoi cell) around a sphere
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Cell {
     pub index: usize,
     pub sas_area: f64,
@@ -98,6 +103,7 @@ impl Ord for ValuedId {
 
 /// Tessellation result containing contacts and cells
 #[derive(Debug, Clone, Default)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct TessellationResult {
     pub contacts: Vec<Contact>,
     pub cells: Vec<Cell>,
@@ -105,6 +111,7 @@ pub struct TessellationResult {
 
 /// Periodic boundary box defined by three shift vectors
 #[derive(Debug, Clone, Copy, Default)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct PeriodicBox {
     pub shift_a: Vector3<f64>,
     pub shift_b: Vector3<f64>,

@@ -20,7 +20,7 @@ Outputs inter-atom contact areas, solvent accessible surface (SAS) areas, and vo
 The port can be used either as a library for other projects, or as a basic CLI tool:
 
 ```sh
-cargo install voronotalt
+cargo install voronota-ltr
 ```
 
 ## Usage
@@ -28,7 +28,7 @@ cargo install voronotalt
 ### API
 
 ```rust
-use voronotalt::{Ball, compute_tessellation};
+use voronota_ltr::{Ball, compute_tessellation};
 
 let balls = vec![
     Ball::new(0.0, 0.0, 0.0, 1.5),
@@ -50,7 +50,7 @@ for cell in &result.cells {
 #### With periodic boundary conditions
 
 ```rust
-use voronotalt::{Ball, PeriodicBox, compute_tessellation};
+use voronota_ltr::{Ball, PeriodicBox, compute_tessellation};
 
 let balls = vec![Ball::new(0.0, 0.0, 0.0, 1.5)];
 let pbox = PeriodicBox::from_corners((0.0, 0.0, 0.0), (10.0, 10.0, 10.0));
@@ -64,7 +64,7 @@ For simulations where only a few spheres change position each step, `UpdateableT
 provides efficient incremental updates:
 
 ```rust
-use voronotalt::{Ball, UpdateableTessellation};
+use voronota_ltr::{Ball, UpdateableTessellation};
 
 let mut balls = vec![
     Ball::new(0.0, 0.0, 0.0, 1.0),
@@ -94,16 +94,16 @@ Input is a `.xyzr` file with whitespace-separated values (last 4 columns: x y z 
 
 ```sh
 # Summary output
-voronotalt -i atoms.xyzr --probe 1.4
+voronota-ltr -i atoms.xyzr --probe 1.4
 
 # Print contacts table
-voronotalt -i atoms.xyzr --probe 1.4 --print-contacts
+voronota-ltr -i atoms.xyzr --probe 1.4 --print-contacts
 
 # Print cells table
-voronotalt -i atoms.xyzr --probe 1.4 --print-cells
+voronota-ltr -i atoms.xyzr --probe 1.4 --print-cells
 
 # With periodic boundary conditions
-voronotalt -i atoms.xyzr --probe 1.4 --periodic-box-corners 0 0 0 100 100 100
+voronota-ltr -i atoms.xyzr --probe 1.4 --periodic-box-corners 0 0 0 100 100 100
 ```
 
 ## Benchmarks

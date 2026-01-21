@@ -1,13 +1,19 @@
 [package]
-name = "voronotalt"
+name = "voronota-ltr"
 version = "0.1.0"
 edition = "2024"
 license = "MIT"
+authors = ["Kliment Olechnovic", "Mikael Lund"]
+
+[features]
+default = ["serde"]
+serde = ["dep:serde", "nalgebra/serde-serialize"]
 
 [dependencies]
 clap = { version = "4", features = ["derive"] }
 nalgebra = "0.33"
 rayon = "1.10"
+serde = { version = "1", features = ["derive"], optional = true }
 
 [dev-dependencies]
 approx = "0.5"

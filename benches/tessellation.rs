@@ -1,6 +1,6 @@
 use criterion::{BenchmarkId, Criterion, Throughput, black_box, criterion_group, criterion_main};
 use std::fs;
-use voronotalt::{Ball, PeriodicBox, UpdateableTessellation, compute_tessellation};
+use voronota_ltr::{Ball, PeriodicBox, UpdateableTessellation, compute_tessellation};
 
 /// Parse xyzr file - last 4 numeric columns are x, y, z, r
 fn parse_xyzr(content: &str) -> Vec<Ball> {

@@ -1,7 +1,7 @@
 //! Tests for UpdateableTessellation
 
 use std::fs;
-use voronotalt::{Ball, PeriodicBox, UpdateableTessellation, compute_tessellation};
+use voronota_ltr::{Ball, PeriodicBox, UpdateableTessellation, compute_tessellation};
 
 /// Macro for approximate equality with context
 macro_rules! assert_approx {
