@@ -4,7 +4,7 @@ use std::collections::HashSet;
 
 use nalgebra::Point3;
 
-use crate::subdivided_icosahedron::SubdividedIcosahedron;
+use crate::subdivided_icosahedron::{SubdividedIcosahedron, SubdivisionDepth};
 use crate::tessellation::compute_tessellation;
 use crate::types::{Ball, TessellationResult};
 
@@ -42,11 +42,7 @@ pub struct SolventSpheresParams {
 
     /// Subdivision depth of the icosahedron used for surface sampling.
     /// Higher values produce more solvent spheres but take longer.
-    /// - 0: 12 sample points per atom
-    /// - 1: 42 sample points (default)
-    /// - 2: 162 sample points
-    /// - 3: 642 sample points
-    pub subdivision_depth: u32,
+    pub subdivision_depth: SubdivisionDepth,
 }
 
 impl Default for SolventSpheresParams {
@@ -54,7 +50,7 @@ impl Default for SolventSpheresParams {
         Self {
             probe: 1.4,
             volume_probe: 0.0,
-            subdivision_depth: 1,
+            subdivision_depth: SubdivisionDepth::default(),
         }
     }
 }
@@ -137,30 +133,30 @@ pub fn compute_solvent_spheres(
 fn build_neighbor_graph(balls: &[Ball], result: &TessellationResult) -> Vec<Vec<(f64, usize)>> {
     let mut neighbors: Vec<Vec<(f64, usize)>> = vec![Vec::new(); balls.len()];
 
+    // Pre-compute which cells have exposed surface for O(1) lookup
+    let exposed: HashSet<usize> = result
+        .cells
+        .iter()
+        .filter(|c| c.sas_area > 0.0)
+        .map(|c| c.index)
+        .collect();
+
     for contact in &result.contacts {
         let (a, b) = (contact.id_a, contact.id_b);
-        let dist = ball_distance(&balls[a], &balls[b]);
+        let dist = nalgebra::distance(&ball_center(&balls[a]), &ball_center(&balls[b]));
 
         // Only add neighbors for atoms with exposed surface
-        if result
-            .cells
-            .iter()
-            .any(|c| c.index == a && c.sas_area > 0.0)
-        {
+        if exposed.contains(&a) {
             neighbors[a].push((dist, b));
         }
-        if result
-            .cells
-            .iter()
-            .any(|c| c.index == b && c.sas_area > 0.0)
-        {
+        if exposed.contains(&b) {
             neighbors[b].push((dist, a));
         }
     }
 
     // Sort by distance for early termination during validity checks
     for n in &mut neighbors {
-        n.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
+        n.sort_by(|a, b| a.0.total_cmp(&b.0));
     }
 
     neighbors
@@ -182,7 +178,7 @@ fn generate_solvent_spheres(
         }
 
         let atom = &balls[cell.index];
-        let center = Point3::new(atom.x, atom.y, atom.z);
+        let center = ball_center(atom);
         let surface_radius = atom.r + params.probe;
 
         for sample_point in sih.points_on_sphere(center, surface_radius) {
@@ -209,13 +205,12 @@ fn is_valid_solvent_position(
     neighbors: &[(f64, usize)],
     balls: &[Ball],
 ) -> bool {
-    let center = Point3::new(atom.x, atom.y, atom.z);
-    let dist_to_atom = point_distance(point, &center) - atom.r;
+    let center = ball_center(atom);
+    let dist_to_atom = nalgebra::distance(point, &center) - atom.r;
 
     for &(_, neighbor_id) in neighbors {
         let neighbor = &balls[neighbor_id];
-        let neighbor_center = Point3::new(neighbor.x, neighbor.y, neighbor.z);
-        let dist_to_neighbor = point_distance(point, &neighbor_center) - neighbor.r;
+        let dist_to_neighbor = nalgebra::distance(point, &ball_center(neighbor)) - neighbor.r;
 
         if dist_to_neighbor <= dist_to_atom {
             return false;
@@ -255,39 +250,29 @@ fn compute_solvent_weights(
     }
 
     let stage2_result = compute_tessellation(&combined, 0.0, None, None);
-    let cell_indices: HashSet<usize> = stage2_result.cells.iter().map(|c| c.index).collect();
+
+    // Map cell index to volume for O(1) lookup
+    let cell_volumes: std::collections::HashMap<usize, f64> = stage2_result
+        .cells
+        .iter()
+        .map(|c| (c.index, c.volume))
+        .collect();
 
     solvent_spheres
         .into_iter()
         .enumerate()
         .map(|(i, mut sphere)| {
-            let idx = num_original + i;
-            if let Some(cell) = cell_indices
-                .contains(&idx)
-                .then(|| stage2_result.cells.iter().find(|c| c.index == idx))
-                .flatten()
-            {
-                sphere.weight = cell.volume;
+            if let Some(&volume) = cell_volumes.get(&(num_original + i)) {
+                sphere.weight = volume;
             }
             sphere
         })
         .collect()
 }
 
-/// Distance between two ball centers.
-fn ball_distance(a: &Ball, b: &Ball) -> f64 {
-    let dx = a.x - b.x;
-    let dy = a.y - b.y;
-    let dz = a.z - b.z;
-    dz.mul_add(dz, dx.mul_add(dx, dy * dy)).sqrt()
-}
-
-/// Euclidean distance between two points.
-fn point_distance(a: &Point3<f64>, b: &Point3<f64>) -> f64 {
-    let dx = a.x - b.x;
-    let dy = a.y - b.y;
-    let dz = a.z - b.z;
-    dz.mul_add(dz, dx.mul_add(dx, dy * dy)).sqrt()
+/// Extract center point from a Ball.
+const fn ball_center(ball: &Ball) -> Point3<f64> {
+    Point3::new(ball.x, ball.y, ball.z)
 }
 
 #[cfg(test)]
@@ -298,7 +283,7 @@ mod tests {
     fn single_sphere_produces_solvent() {
         let balls = vec![Ball::new(0.0, 0.0, 0.0, 1.5)];
         let params = SolventSpheresParams {
-            subdivision_depth: 0, // 12 points
+            subdivision_depth: SubdivisionDepth::Depth0, // 12 points
             ..Default::default()
         };
 
@@ -321,7 +306,7 @@ mod tests {
             Ball::new(2.5, 0.0, 0.0, 1.5), // Close enough to contact
         ];
         let params = SolventSpheresParams {
-            subdivision_depth: 0,
+            subdivision_depth: SubdivisionDepth::Depth0,
             ..Default::default()
         };
 
@@ -349,7 +334,7 @@ mod tests {
         let params = SolventSpheresParams {
             probe: 1.4,
             volume_probe: 0.0,
-            subdivision_depth: 0,
+            subdivision_depth: SubdivisionDepth::Depth0,
         };
 
         let solvent = compute_solvent_spheres(&balls, &params);
@@ -384,7 +369,7 @@ mod tests {
             Ball::new(2.5, 0.0, 0.0, 1.0), // Partially exposed at edge
         ];
         let params = SolventSpheresParams {
-            subdivision_depth: 0,
+            subdivision_depth: SubdivisionDepth::Depth0,
             ..Default::default()
         };
 
