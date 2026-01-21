@@ -17,7 +17,7 @@ use crate::types::{
 ///
 /// # Example
 /// ```
-/// use voronotalt::{Ball, compute_tessellation};
+/// use voronota_ltr::{Ball, compute_tessellation};
 ///
 /// let balls = vec![
 ///     Ball::new(0.0, 0.0, 0.0, 1.5),

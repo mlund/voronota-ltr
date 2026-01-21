@@ -108,8 +108,10 @@ impl PartialOrd for ValuedId {
 
 impl Ord for ValuedId {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.partial_cmp(other)
-            .unwrap_or_else(|| self.index.cmp(&other.index))
+        match self.value.partial_cmp(&other.value) {
+            Some(std::cmp::Ordering::Equal) | None => self.index.cmp(&other.index),
+            Some(ord) => ord,
+        }
     }
 }
 
