@@ -13,6 +13,7 @@ struct GridPoint {
 }
 
 impl GridPoint {
+    #[allow(clippy::cast_possible_truncation)]
     fn from_sphere(s: &Sphere, box_size: f64) -> Self {
         Self {
             x: (s.center.x / box_size).floor() as i32,
@@ -21,7 +22,8 @@ impl GridPoint {
         }
     }
 
-    fn from_sphere_with_offset(s: &Sphere, box_size: f64, offset: &GridPoint) -> Self {
+    #[allow(clippy::cast_possible_truncation)]
+    fn from_sphere_with_offset(s: &Sphere, box_size: f64, offset: &Self) -> Self {
         Self {
             x: (s.center.x / box_size).floor() as i32 - offset.x,
             y: (s.center.y / box_size).floor() as i32 - offset.y,
@@ -29,7 +31,8 @@ impl GridPoint {
         }
     }
 
-    fn index(&self, grid_size: &GridPoint) -> Option<usize> {
+    #[allow(clippy::cast_sign_loss)]
+    const fn index(&self, grid_size: &Self) -> Option<usize> {
         if self.x >= 0
             && self.y >= 0
             && self.z >= 0
@@ -66,7 +69,7 @@ impl GridParameters {
 
         // Box size = max(2*r + 0.25) across all spheres
         for s in spheres {
-            params.box_size = params.box_size.max(s.r * 2.0 + 0.25);
+            params.box_size = params.box_size.max(s.r.mul_add(2.0, 0.25));
         }
 
         // Compute grid bounds
@@ -171,6 +174,7 @@ impl SpheresSearcher {
         }
     }
 
+    #[allow(clippy::cast_sign_loss)]
     fn remove_sphere_from_grid(&mut self, sphere_id: usize) {
         let sphere = &self.spheres[sphere_id];
         let gp = GridPoint::from_sphere_with_offset(
@@ -189,6 +193,11 @@ impl SpheresSearcher {
         }
     }
 
+    #[allow(
+        clippy::cast_sign_loss,
+        clippy::cast_possible_truncation,
+        clippy::cast_possible_wrap
+    )]
     fn add_sphere_to_grid(&mut self, sphere_id: usize) {
         let sphere = &self.spheres[sphere_id];
         let gp = GridPoint::from_sphere_with_offset(
@@ -207,6 +216,11 @@ impl SpheresSearcher {
         }
     }
 
+    #[allow(
+        clippy::cast_sign_loss,
+        clippy::cast_possible_truncation,
+        clippy::cast_possible_wrap
+    )]
     fn init_boxes(&mut self) {
         let total_cells = (self.grid_params.grid_size.x
             * self.grid_params.grid_size.y
@@ -233,8 +247,9 @@ impl SpheresSearcher {
         }
     }
 
-    /// Find all spheres that collide with sphere at central_id
+    /// Find all spheres that collide with sphere at `central_id`
     /// Returns sorted by distance to intersection circle center
+    #[allow(clippy::cast_sign_loss)]
     pub fn find_colliding_ids(&self, central_id: usize, discard_hidden: bool) -> CollisionResult {
         let mut result = CollisionResult {
             colliding_ids: Vec::new(),

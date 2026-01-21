@@ -40,6 +40,7 @@ struct Cli {
     quiet: bool,
 }
 
+#[allow(clippy::many_single_char_names)]
 fn parse_balls(reader: impl BufRead) -> Vec<Ball> {
     reader
         .lines()
@@ -121,9 +122,9 @@ fn main() -> io::Result<()> {
 
         println!("contacts: {}", result.contacts.len());
         println!("cells: {}", result.cells.len());
-        println!("total_contact_area: {:.4}", total_contact_area);
-        println!("total_sas_area: {:.4}", total_sas_area);
-        println!("total_volume: {:.4}", total_volume);
+        println!("total_contact_area: {total_contact_area:.4}");
+        println!("total_sas_area: {total_sas_area:.4}");
+        println!("total_volume: {total_volume:.4}");
     }
 
     Ok(())

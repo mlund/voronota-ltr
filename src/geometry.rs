@@ -130,6 +130,7 @@ pub fn min_angle(o: &Point3<f64>, a: &Point3<f64>, b: &Point3<f64>) -> f64 {
 }
 
 /// Directed angle from ray oa to ray ob, using c to determine direction
+#[allow(clippy::many_single_char_names)]
 pub fn directed_angle(o: &Point3<f64>, a: &Point3<f64>, b: &Point3<f64>, c: &Point3<f64>) -> f64 {
     let angle = min_angle(o, a, b);
     let v1 = (a - o).normalize();
@@ -175,7 +176,7 @@ pub fn distance_to_intersection_circle_center(a: &Sphere, b: &Sphere) -> f64 {
     if cm < EPSILON {
         return 0.0;
     }
-    let cos_g = (a.r * a.r + cm * cm - b.r * b.r) / (2.0 * a.r * cm);
+    let cos_g = b.r.mul_add(-b.r, a.r.mul_add(a.r, cm * cm)) / (2.0 * a.r * cm);
     a.r * cos_g
 }
 
@@ -186,7 +187,7 @@ pub fn center_of_intersection_circle(a: &Sphere, b: &Sphere) -> Point3<f64> {
     if cm < EPSILON {
         return a.center;
     }
-    let cos_g = (a.r * a.r + cm * cm - b.r * b.r) / (2.0 * a.r * cm);
+    let cos_g = b.r.mul_add(-b.r, a.r.mul_add(a.r, cm * cm)) / (2.0 * a.r * cm);
     a.center + cv * (a.r * cos_g / cm)
 }
 
@@ -197,13 +198,14 @@ pub fn intersection_circle_of_two_spheres(a: &Sphere, b: &Sphere) -> Sphere {
     if cm < EPSILON {
         return Sphere::new(a.center, 0.0);
     }
-    let cos_g = (a.r * a.r + cm * cm - b.r * b.r) / (2.0 * a.r * cm);
+    let cos_g = b.r.mul_add(-b.r, a.r.mul_add(a.r, cm * cm)) / (2.0 * a.r * cm);
     let sin_g = (1.0 - cos_g * cos_g).max(0.0).sqrt();
     let center = a.center + cv * (a.r * cos_g / cm);
     Sphere::new(center, a.r * sin_g)
 }
 
 /// Project point o onto line segment ab, return Some if projection is inside segment
+#[allow(clippy::many_single_char_names)]
 pub fn project_point_inside_line(
     o: &Point3<f64>,
     a: &Point3<f64>,
@@ -218,7 +220,7 @@ pub fn project_point_inside_line(
     }
 }
 
-/// Intersect segment (from p_out toward p_in) with circle, finding the intersection closest to p_out
+/// Intersect segment (from `p_out` toward `p_in`) with circle, finding the intersection closest to `p_out`
 pub fn intersect_segment_with_circle(
     circle: &Sphere,
     p_in: &Point3<f64>,
@@ -232,7 +234,9 @@ pub fn intersect_segment_with_circle(
     let v = (p_in - p_out) / dist;
     let u = circle.center - p_out;
     let s = p_out + v * v.dot(&u);
-    let ll = circle.r * circle.r - (circle.center - s).norm_squared();
+    let ll = circle
+        .r
+        .mul_add(circle.r, -(circle.center - s).norm_squared());
 
     if ll >= 0.0 {
         Some(s - v * ll.sqrt())

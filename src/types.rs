@@ -10,6 +10,7 @@ pub struct Ball {
 }
 
 impl Ball {
+    #[must_use]
     pub const fn new(x: f64, y: f64, z: f64, r: f64) -> Self {
         Self { x, y, z, r }
     }
@@ -23,11 +24,11 @@ pub struct Sphere {
 }
 
 impl Sphere {
-    pub fn new(center: Point3<f64>, r: f64) -> Self {
+    pub const fn new(center: Point3<f64>, r: f64) -> Self {
         Self { center, r }
     }
 
-    pub fn from_coords(x: f64, y: f64, z: f64, r: f64) -> Self {
+    pub const fn from_coords(x: f64, y: f64, z: f64, r: f64) -> Self {
         Self {
             center: Point3::new(x, y, z),
             r,
@@ -113,6 +114,7 @@ pub struct PeriodicBox {
 
 impl PeriodicBox {
     /// Create from two corner points (axis-aligned box)
+    #[must_use]
     pub const fn from_corners(min: (f64, f64, f64), max: (f64, f64, f64)) -> Self {
         Self {
             shift_a: Vector3::new(max.0 - min.0, 0.0, 0.0),
@@ -122,6 +124,7 @@ impl PeriodicBox {
     }
 
     /// Create from three shift direction vectors (for non-orthogonal boxes)
+    #[must_use]
     pub const fn from_vectors(a: (f64, f64, f64), b: (f64, f64, f64), c: (f64, f64, f64)) -> Self {
         Self {
             shift_a: Vector3::new(a.0, a.1, a.2),
@@ -134,18 +137,33 @@ impl PeriodicBox {
     pub(crate) fn shift_sphere(&self, s: &Sphere, wa: f64, wb: f64, wc: f64) -> Sphere {
         Sphere {
             center: Point3::new(
-                s.center.x + self.shift_a.x * wa + self.shift_b.x * wb + self.shift_c.x * wc,
-                s.center.y + self.shift_a.y * wa + self.shift_b.y * wb + self.shift_c.y * wc,
-                s.center.z + self.shift_a.z * wa + self.shift_b.z * wb + self.shift_c.z * wc,
+                self.shift_c.x.mul_add(
+                    wc,
+                    self.shift_b
+                        .x
+                        .mul_add(wb, self.shift_a.x.mul_add(wa, s.center.x)),
+                ),
+                self.shift_c.y.mul_add(
+                    wc,
+                    self.shift_b
+                        .y
+                        .mul_add(wb, self.shift_a.y.mul_add(wa, s.center.y)),
+                ),
+                self.shift_c.z.mul_add(
+                    wc,
+                    self.shift_b
+                        .z
+                        .mul_add(wb, self.shift_a.z.mul_add(wa, s.center.z)),
+                ),
             ),
             r: s.r,
         }
     }
 }
 
-/// Internal contact descriptor summary (matches C++ ContactDescriptorSummary)
+/// Internal contact descriptor summary (matches C++ `ContactDescriptorSummary`)
 #[derive(Debug, Clone, Default)]
-pub(crate) struct ContactDescriptorSummary {
+pub struct ContactDescriptorSummary {
     pub area: f64,
     pub arc_length: f64,
     pub solid_angle_a: f64,
@@ -159,8 +177,8 @@ pub(crate) struct ContactDescriptorSummary {
 }
 
 impl ContactDescriptorSummary {
-    /// Ensure id_a < id_b, swapping related values if needed
-    pub fn ensure_ids_ordered(&mut self) {
+    /// Ensure `id_a` < `id_b`, swapping related values if needed
+    pub const fn ensure_ids_ordered(&mut self) {
         if self.id_a > self.id_b {
             std::mem::swap(&mut self.id_a, &mut self.id_b);
             std::mem::swap(&mut self.solid_angle_a, &mut self.solid_angle_b);
@@ -171,7 +189,7 @@ impl ContactDescriptorSummary {
 
 /// Cell contact summary for computing SAS area and volume
 #[derive(Debug, Clone)]
-pub(crate) struct CellContactSummary {
+pub struct CellContactSummary {
     pub id: usize,
     pub area: f64,
     pub arc_length: f64,
@@ -250,7 +268,7 @@ impl CellContactSummary {
             if self.explained_solid_angle_positive > self.explained_solid_angle_negative {
                 let angle_diff =
                     self.explained_solid_angle_positive - self.explained_solid_angle_negative;
-                self.sas_area = (4.0 * PI - angle_diff.max(0.0)) * r * r;
+                self.sas_area = 4.0f64.mul_add(PI, -angle_diff.max(0.0)) * r * r;
             } else {
                 let angle_diff =
                     self.explained_solid_angle_negative - self.explained_solid_angle_positive;

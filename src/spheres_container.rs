@@ -9,7 +9,7 @@ use crate::spheres_searcher::SpheresSearcher;
 use crate::types::{PeriodicBox, Sphere, ValuedId};
 
 /// Result of an update operation
-pub(crate) struct UpdateResult {
+pub struct UpdateResult {
     /// IDs of spheres that were changed
     pub changed_ids: Vec<usize>,
     /// IDs of spheres affected (changed + their neighbors)
@@ -19,7 +19,7 @@ pub(crate) struct UpdateResult {
 }
 
 /// Manages sphere state including periodic images and collision detection.
-pub(crate) struct SpheresContainer {
+pub struct SpheresContainer {
     spheres: Vec<Sphere>,
     periodic_box: Option<PeriodicBox>,
     /// Spheres including periodic copies (27x for periodic case)
@@ -33,7 +33,7 @@ pub(crate) struct SpheresContainer {
 }
 
 impl SpheresContainer {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             spheres: Vec::new(),
             periodic_box: None,
@@ -61,6 +61,7 @@ impl SpheresContainer {
     ///
     /// If `changed_ids` is provided, only those spheres are checked for changes.
     /// Otherwise, all spheres are compared to detect changes.
+    #[allow(clippy::too_many_lines, clippy::option_if_let_else)]
     pub fn update(
         &mut self,
         new_spheres: &[Sphere],
@@ -164,16 +165,20 @@ impl SpheresContainer {
             let mut i = 0;
             let mut j = 0;
             while i < affected.len() && j < more_affected.len() {
-                if affected[i] < more_affected[j] {
-                    merged.push(affected[i]);
-                    i += 1;
-                } else if affected[i] > more_affected[j] {
-                    merged.push(more_affected[j]);
-                    j += 1;
-                } else {
-                    merged.push(affected[i]);
-                    i += 1;
-                    j += 1;
+                match affected[i].cmp(&more_affected[j]) {
+                    std::cmp::Ordering::Less => {
+                        merged.push(affected[i]);
+                        i += 1;
+                    }
+                    std::cmp::Ordering::Greater => {
+                        merged.push(more_affected[j]);
+                        j += 1;
+                    }
+                    std::cmp::Ordering::Equal => {
+                        merged.push(affected[i]);
+                        i += 1;
+                        j += 1;
+                    }
                 }
             }
             merged.extend_from_slice(&affected[i..]);
@@ -202,7 +207,7 @@ impl SpheresContainer {
             return None;
         }
 
-        self.exclusion_statuses[id] = if excluded { 1 } else { 0 };
+        self.exclusion_statuses[id] = i32::from(excluded);
         self.set_exclusion_status_periodic_instances(id);
 
         // Collect affected IDs
@@ -248,7 +253,7 @@ impl SpheresContainer {
     }
 
     #[inline]
-    pub fn periodic_box(&self) -> Option<&PeriodicBox> {
+    pub const fn periodic_box(&self) -> Option<&PeriodicBox> {
         self.periodic_box.as_ref()
     }
 
@@ -261,12 +266,15 @@ impl SpheresContainer {
             exclusion_statuses: self.exclusion_statuses.clone(),
             colliding_ids: self.colliding_ids.clone(),
             total_collisions: self.total_collisions,
-            searcher: self.searcher.as_ref().map(|s| s.clone_for_backup()),
+            searcher: self
+                .searcher
+                .as_ref()
+                .map(super::spheres_searcher::SpheresSearcher::clone_for_backup),
         }
     }
 
     /// Restore state from a backup for a subset of sphere IDs.
-    pub fn restore_from(&mut self, backup: &SpheresContainer, affected_ids: &[usize]) {
+    pub fn restore_from(&mut self, backup: &Self, affected_ids: &[usize]) {
         if affected_ids.is_empty()
             || self.spheres.len() != backup.spheres.len()
             || affected_ids.len() > self.size_threshold_for_full_reinit()
@@ -287,7 +295,7 @@ impl SpheresContainer {
         // Restore only affected spheres
         for &id in affected_ids {
             self.spheres[id] = backup.spheres[id];
-            self.colliding_ids[id] = backup.colliding_ids[id].clone();
+            self.colliding_ids[id].clone_from(&backup.colliding_ids[id]);
             self.exclusion_statuses[id] = backup.exclusion_statuses[id];
 
             if self.periodic_box.is_some() {
@@ -326,8 +334,12 @@ impl SpheresContainer {
                     for sz in -1..=1i32 {
                         if sx != 0 || sy != 0 || sz != 0 {
                             for s in &self.spheres {
-                                self.populated_spheres
-                                    .push(pbox.shift_sphere(s, sx as f64, sy as f64, sz as f64));
+                                self.populated_spheres.push(pbox.shift_sphere(
+                                    s,
+                                    f64::from(sx),
+                                    f64::from(sy),
+                                    f64::from(sz),
+                                ));
                             }
                         }
                     }
@@ -357,9 +369,9 @@ impl SpheresContainer {
                             let shifted_id = g * n + id;
                             self.populated_spheres[shifted_id] = pbox.shift_sphere(
                                 &self.spheres[id],
-                                sx as f64,
-                                sy as f64,
-                                sz as f64,
+                                f64::from(sx),
+                                f64::from(sy),
+                                f64::from(sz),
                             );
                             changed_ids.push(shifted_id);
                             g += 1;
@@ -442,6 +454,11 @@ impl SpheresContainer {
 
     /// Recount total collisions.
     fn recount_collisions(&mut self) {
-        self.total_collisions = self.colliding_ids.iter().map(|v| v.len()).sum::<usize>() / 2;
+        self.total_collisions = self
+            .colliding_ids
+            .iter()
+            .map(std::vec::Vec::len)
+            .sum::<usize>()
+            / 2;
     }
 }

@@ -22,7 +22,7 @@ struct ContourPoint {
 }
 
 impl ContourPoint {
-    fn new(p: Point3<f64>, left_id: usize, right_id: usize) -> Self {
+    const fn new(p: Point3<f64>, left_id: usize, right_id: usize) -> Self {
         Self {
             p,
             angle: 0.0,
@@ -90,6 +90,7 @@ impl ContactDescriptor {
 }
 
 /// Construct contact descriptor between spheres a and b
+#[allow(clippy::too_many_lines)]
 pub fn construct_contact_descriptor(
     spheres: &[Sphere],
     a_id: usize,
@@ -178,7 +179,7 @@ pub fn construct_contact_descriptor(
             &cd.intersection_circle.center,
         )
         .abs();
-        let xl = l / (1.0 - cos_val * cos_val).sqrt();
+        let xl = l / cos_val.mul_add(-cos_val, 1.0).sqrt();
 
         if xl >= cd.intersection_circle.r {
             // Cutting plane doesn't intersect the circle
@@ -265,15 +266,17 @@ pub fn construct_contact_descriptor(
     Some(cd)
 }
 
+// 1.19 ≈ 1/cos(30°): ensures hexagon vertices are outside the circle
+const HEXAGON_SCALE: f64 = 1.19;
+
 /// Initialize hexagonal contour from intersection circle.
 /// The contour starts as a regular hexagon inscribed in a circle slightly
 /// larger than the intersection circle (factor 1.19 ≈ 1/cos(30°) ensures
 /// the hexagon fully contains the circle for robust cutting).
+#[allow(clippy::while_float)]
 fn init_contour(contour: &mut Contour, a_id: usize, base: &Sphere, axis: &Vector3<f64>) {
     contour.clear();
 
-    // 1.19 ≈ 1/cos(30°): ensures hexagon vertices are outside the circle
-    const HEXAGON_SCALE: f64 = 1.19;
     let first_point = any_normal_of_vector(axis) * base.r * HEXAGON_SCALE;
     let angle_step = FRAC_PI_3;
 
@@ -446,6 +449,7 @@ fn cut_contour(
 }
 
 /// Restrict contour to lie on the intersection circle
+#[allow(clippy::too_many_lines)]
 fn restrict_contour_to_circle(
     contour: &mut Contour,
     ic: &Sphere,
@@ -588,6 +592,7 @@ fn restrict_contour_to_circle(
 }
 
 /// Calculate area of the contour
+#[allow(clippy::cast_precision_loss)]
 fn calculate_contour_area(contour: &Contour, ic: &Sphere, barycenter: &mut Point3<f64>) -> f64 {
     // Compute barycenter
     let mut sum = Vector3::zeros();
@@ -611,6 +616,7 @@ fn calculate_contour_area(contour: &Contour, ic: &Sphere, barycenter: &mut Point
 }
 
 /// Calculate solid angle contribution
+#[allow(clippy::useless_let_if_seq)]
 fn calculate_solid_angle(a: &Sphere, b: &Sphere, ic: &Sphere, contour: &Contour) -> f64 {
     let mut turn_angle = 0.0;
 

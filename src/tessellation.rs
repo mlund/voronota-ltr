@@ -25,6 +25,8 @@ use crate::types::{
 /// ];
 /// let result = compute_tessellation(&balls, 1.4, None, None);
 /// ```
+#[must_use]
+#[allow(clippy::option_if_let_else)]
 pub fn compute_tessellation(
     balls: &[Ball],
     probe: f64,
@@ -290,7 +292,12 @@ fn populate_periodic_spheres(spheres: &[Sphere], pbox: &PeriodicBox) -> Vec<Sphe
             for sz in -1..=1i32 {
                 if sx != 0 || sy != 0 || sz != 0 {
                     for s in spheres {
-                        result.push(pbox.shift_sphere(s, sx as f64, sy as f64, sz as f64));
+                        result.push(pbox.shift_sphere(
+                            s,
+                            f64::from(sx),
+                            f64::from(sy),
+                            f64::from(sz),
+                        ));
                     }
                 }
             }

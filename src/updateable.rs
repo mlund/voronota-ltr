@@ -22,7 +22,7 @@ pub struct UpdateableResult {
 }
 
 impl UpdateableResult {
-    fn is_empty(&self) -> bool {
+    const fn is_empty(&self) -> bool {
         self.cells.is_empty() || self.contacts_by_sphere.is_empty()
     }
 
@@ -43,12 +43,13 @@ impl UpdateableResult {
     }
 
     /// Get number of spheres in the result.
-    pub fn num_spheres(&self) -> usize {
+    #[must_use]
+    pub const fn num_spheres(&self) -> usize {
         self.contacts_by_sphere.len()
     }
 }
 
-/// Internal state for UpdateableTessellation.
+/// Internal state for `UpdateableTessellation`.
 struct State {
     container: SpheresContainer,
     result: UpdateableResult,
@@ -107,6 +108,7 @@ pub struct UpdateableTessellation {
 
 impl UpdateableTessellation {
     /// Create a new updateable tessellation without backup support.
+    #[must_use]
     pub fn new() -> Self {
         Self {
             state: State::new(),
@@ -117,6 +119,7 @@ impl UpdateableTessellation {
     }
 
     /// Create a new updateable tessellation with backup support for restore.
+    #[must_use]
     pub fn with_backup() -> Self {
         Self {
             state: State::new(),
@@ -187,10 +190,10 @@ impl UpdateableTessellation {
             // When excluding: affected = sphere + its current neighbors
             let mut affected = vec![id];
             for contact in &self.state.result.contacts_by_sphere[id] {
-                let neighbor_id = if contact.id_a != id {
-                    contact.id_a
-                } else {
+                let neighbor_id = if contact.id_a == id {
                     contact.id_b
+                } else {
+                    contact.id_a
                 };
                 if let Err(pos) = affected.binary_search(&neighbor_id) {
                     affected.insert(pos, neighbor_id);
@@ -225,9 +228,8 @@ impl UpdateableTessellation {
         }
 
         // Take backup out to avoid borrow issues
-        let backup = match self.backup.take() {
-            Some(b) => b,
-            None => return false,
+        let Some(backup) = self.backup.take() else {
+            return false;
         };
 
         // Restore container state
@@ -248,9 +250,9 @@ impl UpdateableTessellation {
         } else {
             for &id in &affected {
                 if id < n {
-                    self.state.result.contacts_by_sphere[id] =
-                        backup.result.contacts_by_sphere[id].clone();
-                    self.state.cell_summaries[id] = backup.cell_summaries[id].clone();
+                    self.state.result.contacts_by_sphere[id]
+                        .clone_from(&backup.result.contacts_by_sphere[id]);
+                    self.state.cell_summaries[id].clone_from(&backup.cell_summaries[id]);
                 }
             }
             true
@@ -268,11 +270,13 @@ impl UpdateableTessellation {
     }
 
     /// Get the detailed result with per-sphere contact storage.
-    pub fn result(&self) -> &UpdateableResult {
+    #[must_use]
+    pub const fn result(&self) -> &UpdateableResult {
         &self.state.result
     }
 
-    /// Get aggregated summary as TessellationResult.
+    /// Get aggregated summary as `TessellationResult`.
+    #[must_use]
     pub fn summary(&self) -> TessellationResult {
         let n = self.state.result.contacts_by_sphere.len();
         let mut contacts = Vec::new();
@@ -310,22 +314,26 @@ impl UpdateableTessellation {
     }
 
     /// Get IDs of spheres that changed in the last update.
+    #[must_use]
     pub fn changed_ids(&self) -> &[usize] {
         &self.state.changed_ids
     }
 
     /// Get IDs of spheres affected by the last update (changed + neighbors).
+    #[must_use]
     pub fn affected_ids(&self) -> &[usize] {
         &self.state.affected_ids
     }
 
     /// Whether the last update required a full recomputation.
-    pub fn last_update_was_full_reinit(&self) -> bool {
+    #[must_use]
+    pub const fn last_update_was_full_reinit(&self) -> bool {
         self.state.was_full_reinit
     }
 
     /// Whether backup is enabled.
-    pub fn backup_enabled(&self) -> bool {
+    #[must_use]
+    pub const fn backup_enabled(&self) -> bool {
         self.backup_enabled
     }
 
