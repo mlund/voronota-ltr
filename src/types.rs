@@ -24,10 +24,12 @@ impl Ball {
     }
 }
 
-/// Internal sphere representation with nalgebra Point3
+/// Internal sphere representation with nalgebra Point3.
 #[derive(Debug, Clone, Copy)]
 pub struct Sphere {
+    /// Center point of the sphere.
     pub center: Point3<f64>,
+    /// Radius (may include probe radius).
     pub r: f64,
 }
 
@@ -79,10 +81,12 @@ pub struct Cell {
     pub volume: f64,
 }
 
-/// Sorted collision pair: distance to intersection circle center + sphere index
+/// Sorted collision pair: distance to intersection circle center + sphere index.
 #[derive(Debug, Clone, Copy)]
 pub struct ValuedId {
+    /// Distance from sphere center to intersection circle center.
     pub value: f64,
+    /// Index of the colliding sphere.
     pub index: usize,
 }
 
@@ -215,18 +219,27 @@ impl PeriodicBox {
     }
 }
 
-/// Internal contact descriptor summary (matches C++ `ContactDescriptorSummary`)
+/// Internal contact descriptor summary (matches C++ `ContactDescriptorSummary`).
 #[derive(Debug, Clone, Default)]
 pub struct ContactDescriptorSummary {
+    /// Contact area between the two spheres.
     pub area: f64,
+    /// Arc length of the contact boundary.
     pub arc_length: f64,
+    /// Solid angle contribution from sphere A's perspective.
     pub solid_angle_a: f64,
+    /// Solid angle contribution from sphere B's perspective.
     pub solid_angle_b: f64,
+    /// Pyramid volume contribution from sphere A's perspective.
     pub pyramid_volume_a: f64,
+    /// Pyramid volume contribution from sphere B's perspective.
     pub pyramid_volume_b: f64,
+    /// Distance between sphere centers.
     #[allow(dead_code)]
     pub distance: f64,
+    /// Index of the first sphere.
     pub id_a: usize,
+    /// Index of the second sphere.
     pub id_b: usize,
 }
 
@@ -241,19 +254,30 @@ impl ContactDescriptorSummary {
     }
 }
 
-/// Cell contact summary for computing SAS area and volume
+/// Cell contact summary for computing SAS area and volume.
 #[derive(Debug, Clone)]
 pub struct CellContactSummary {
+    /// Sphere index this summary belongs to.
     pub id: usize,
+    /// Total contact area with neighbors.
     pub area: f64,
+    /// Total arc length of contact boundaries.
     pub arc_length: f64,
+    /// Sum of positive solid angle contributions.
     pub explained_solid_angle_positive: f64,
+    /// Sum of negative solid angle contributions (stored as positive).
     pub explained_solid_angle_negative: f64,
+    /// Sum of positive pyramid volume contributions.
     pub explained_pyramid_volume_positive: f64,
+    /// Sum of negative pyramid volume contributions (stored as positive).
     pub explained_pyramid_volume_negative: f64,
+    /// Computed solvent-accessible surface area.
     pub sas_area: f64,
+    /// Computed volume inside the SAS.
     pub sas_inside_volume: f64,
+    /// Number of contacts added to this summary.
     pub count: usize,
+    /// Processing stage: 0=init, 1=contacts added, 2=SAS computed.
     pub stage: i32,
 }
 
