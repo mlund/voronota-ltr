@@ -811,6 +811,7 @@ dependencies = [
  "nalgebra",
  "rayon",
  "serde",
+ "serde_json",
 ]
 
 [[package]]

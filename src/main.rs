@@ -1,5 +1,5 @@
 use std::fs::File;
-use std::io::{self, BufRead, BufReader, Write};
+use std::io::{self, BufRead, BufReader};
 use std::path::PathBuf;
 
 use clap::Parser;
@@ -23,17 +23,13 @@ struct Cli {
     #[arg(short, long)]
     input: Option<PathBuf>,
 
+    /// Output JSON file. Writes to stdout if not specified
+    #[arg(short, long)]
+    output: Option<PathBuf>,
+
     /// Periodic box corners: x1 y1 z1 x2 y2 z2
     #[arg(long, num_args = 6, value_names = ["X1", "Y1", "Z1", "X2", "Y2", "Z2"])]
     periodic_box_corners: Option<Vec<f64>>,
-
-    /// Print contacts table to stdout
-    #[arg(long)]
-    print_contacts: bool,
-
-    /// Print cells table to stdout
-    #[arg(long)]
-    print_cells: bool,
 
     /// Suppress log messages
     #[arg(short, long)]
@@ -56,40 +52,6 @@ fn parse_balls(reader: impl BufRead) -> Vec<Ball> {
         .map_while(Result::ok)
         .filter_map(|line| parse_last_four_columns(&line))
         .collect()
-}
-
-fn write_contacts(out: &mut impl Write, contacts: &[voronota_ltr::Contact]) -> io::Result<()> {
-    for c in contacts {
-        writeln!(
-            out,
-            "{} {} {:.6} {:.6}",
-            c.id_a, c.id_b, c.area, c.arc_length
-        )?;
-    }
-    Ok(())
-}
-
-fn write_cells(out: &mut impl Write, cells: &[voronota_ltr::Cell]) -> io::Result<()> {
-    for c in cells {
-        writeln!(out, "{} {:.6} {:.6}", c.index, c.sas_area, c.volume)?;
-    }
-    Ok(())
-}
-
-fn write_summary(
-    out: &mut impl Write,
-    result: &voronota_ltr::TessellationResult,
-) -> io::Result<()> {
-    let total_contact_area: f64 = result.contacts.iter().map(|c| c.area).sum();
-    let total_sas_area: f64 = result.cells.iter().map(|c| c.sas_area).sum();
-    let total_volume: f64 = result.cells.iter().map(|c| c.volume).sum();
-
-    writeln!(out, "contacts: {}", result.contacts.len())?;
-    writeln!(out, "cells: {}", result.cells.len())?;
-    writeln!(out, "total_contact_area: {total_contact_area:.4}")?;
-    writeln!(out, "total_sas_area: {total_sas_area:.4}")?;
-    writeln!(out, "total_volume: {total_volume:.4}")?;
-    Ok(())
 }
 
 fn main() -> io::Result<()> {
@@ -127,18 +89,14 @@ fn main() -> io::Result<()> {
         );
     }
 
-    let mut stdout = io::stdout().lock();
-
-    if cli.print_contacts {
-        write_contacts(&mut stdout, &result.contacts)?;
-    }
-
-    if cli.print_cells {
-        write_cells(&mut stdout, &result.cells)?;
-    }
-
-    if !(cli.print_contacts || cli.print_cells) {
-        write_summary(&mut stdout, &result)?;
+    // Write JSON output
+    if let Some(path) = &cli.output {
+        let file = File::create(path)?;
+        serde_json::to_writer_pretty(file, &result)?;
+    } else {
+        let stdout = io::stdout().lock();
+        serde_json::to_writer_pretty(stdout, &result)?;
+        println!();
     }
 
     Ok(())

@@ -1,6 +1,8 @@
 use std::io::Write;
 use std::process::{Command, Stdio};
 
+use serde::Deserialize;
+
 fn binary() -> Command {
     Command::new(env!("CARGO_BIN_EXE_voronota-ltr"))
 }
@@ -13,17 +15,25 @@ fn assert_approx(name: &str, actual: f64, expected: f64, tolerance: f64) {
     );
 }
 
-fn parse_summary(output: &str) -> std::collections::HashMap<String, String> {
-    output
-        .lines()
-        .filter_map(|line| {
-            let mut parts = line.splitn(2, ':');
-            Some((
-                parts.next()?.trim().to_string(),
-                parts.next()?.trim().to_string(),
-            ))
-        })
-        .collect()
+#[derive(Deserialize)]
+struct Contact {
+    area: f64,
+}
+
+#[derive(Deserialize)]
+struct Cell {
+    sas_area: f64,
+    volume: f64,
+}
+
+#[derive(Deserialize)]
+struct TessellationResult {
+    contacts: Vec<Contact>,
+    cells: Vec<Cell>,
+}
+
+fn parse_json(output: &str) -> TessellationResult {
+    serde_json::from_str(output).expect("failed to parse JSON output")
 }
 
 #[test]
@@ -41,28 +51,18 @@ fn test_balls_cs_1x1() {
 
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
-    let summary = parse_summary(&stdout);
+    let result = parse_json(&stdout);
 
-    assert_eq!(summary["contacts"], "153");
-    assert_eq!(summary["cells"], "100");
-    assert_approx(
-        "total_contact_area",
-        summary["total_contact_area"].parse().unwrap(),
-        3992.55,
-        1.0,
-    );
-    assert_approx(
-        "total_sas_area",
-        summary["total_sas_area"].parse().unwrap(),
-        21979.6,
-        10.0,
-    );
-    assert_approx(
-        "total_volume",
-        summary["total_volume"].parse().unwrap(),
-        46419.9,
-        10.0,
-    );
+    assert_eq!(result.contacts.len(), 153);
+    assert_eq!(result.cells.len(), 100);
+
+    let total_contact_area: f64 = result.contacts.iter().map(|c| c.area).sum();
+    let total_sas_area: f64 = result.cells.iter().map(|c| c.sas_area).sum();
+    let total_volume: f64 = result.cells.iter().map(|c| c.volume).sum();
+
+    assert_approx("total_contact_area", total_contact_area, 3992.55, 1.0);
+    assert_approx("total_sas_area", total_sas_area, 21979.6, 10.0);
+    assert_approx("total_volume", total_volume, 46419.9, 10.0);
 }
 
 #[test]
@@ -87,28 +87,18 @@ fn test_balls_cs_1x1_periodic() {
 
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
-    let summary = parse_summary(&stdout);
+    let result = parse_json(&stdout);
 
-    assert_eq!(summary["contacts"], "189");
-    assert_eq!(summary["cells"], "100");
-    assert_approx(
-        "total_contact_area",
-        summary["total_contact_area"].parse().unwrap(),
-        4812.14,
-        50.0,
-    );
-    assert_approx(
-        "total_sas_area",
-        summary["total_sas_area"].parse().unwrap(),
-        20023.1,
-        100.0,
-    );
-    assert_approx(
-        "total_volume",
-        summary["total_volume"].parse().unwrap(),
-        45173.2,
-        100.0,
-    );
+    assert_eq!(result.contacts.len(), 189);
+    assert_eq!(result.cells.len(), 100);
+
+    let total_contact_area: f64 = result.contacts.iter().map(|c| c.area).sum();
+    let total_sas_area: f64 = result.cells.iter().map(|c| c.sas_area).sum();
+    let total_volume: f64 = result.cells.iter().map(|c| c.volume).sum();
+
+    assert_approx("total_contact_area", total_contact_area, 4812.14, 50.0);
+    assert_approx("total_sas_area", total_sas_area, 20023.1, 100.0);
+    assert_approx("total_volume", total_volume, 45173.2, 100.0);
 }
 
 #[test]
@@ -120,10 +110,10 @@ fn test_balls_2zsk() {
 
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
-    let summary = parse_summary(&stdout);
+    let result = parse_json(&stdout);
 
-    assert_eq!(summary["contacts"], "23855");
-    assert_eq!(summary["cells"], "3545");
+    assert_eq!(result.contacts.len(), 23855);
+    assert_eq!(result.cells.len(), 3545);
 }
 
 #[test]
@@ -145,62 +135,9 @@ fn test_stdin_input() {
     let output = child.wait_with_output().expect("failed to wait");
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
-    let summary = parse_summary(&stdout);
+    let result = parse_json(&stdout);
 
-    assert_eq!(summary["cells"], "3");
-}
-
-#[test]
-fn test_print_contacts() {
-    let output = binary()
-        .args([
-            "-i",
-            "benches/data/balls_cs_1x1.xyzr",
-            "--probe",
-            "2.0",
-            "--print-contacts",
-            "-q",
-        ])
-        .output()
-        .expect("failed to run binary");
-
-    assert!(output.status.success());
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let first_line = stdout.lines().next().unwrap();
-    let parts: Vec<&str> = first_line.split_whitespace().collect();
-
-    assert_eq!(parts.len(), 4, "contact line should have 4 columns");
-    assert_eq!(parts[0], "0");
-    assert_eq!(parts[1], "1");
-    assert_approx(
-        "first_contact_area",
-        parts[2].parse().unwrap(),
-        42.9555,
-        0.01,
-    );
-}
-
-#[test]
-fn test_print_cells() {
-    let output = binary()
-        .args([
-            "-i",
-            "benches/data/balls_cs_1x1.xyzr",
-            "--probe",
-            "2.0",
-            "--print-cells",
-            "-q",
-        ])
-        .output()
-        .expect("failed to run binary");
-
-    assert!(output.status.success());
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let first_line = stdout.lines().next().unwrap();
-    let parts: Vec<&str> = first_line.split_whitespace().collect();
-
-    assert_eq!(parts.len(), 3, "cell line should have 3 columns");
-    assert_eq!(parts[0], "0");
+    assert_eq!(result.cells.len(), 3);
 }
 
 #[test]
@@ -214,4 +151,5 @@ fn test_help() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains(".xyzr"));
     assert!(stdout.contains("--probe"));
+    assert!(stdout.contains("--output"));
 }
