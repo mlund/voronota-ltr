@@ -57,8 +57,139 @@ Analyzed using the `wide` crate for explicit SIMD:
 2. **Control flow**: Hot functions have early-exit conditions (`continue`, `break`) that break SIMD batching
 3. **Variable-length data**: Contours have 6-20 points, not aligned to SIMD widths
 
+### Proposed Changes for SIMD
+
+#### 1. Structure of Arrays (SoA) for Spheres
+```rust
+// Current AoS
+struct Sphere { center: Point3<f64>, r: f64 }
+
+// Proposed SoA - enables loading 4 coordinates at once
+struct Spheres {
+    x: Vec<f64>,
+    y: Vec<f64>,
+    z: Vec<f64>,
+    r: Vec<f64>,
+}
+```
+
+#### 2. Batch Collision Detection in `find_colliding_ids`
+Test 4 candidate spheres simultaneously instead of one at a time:
+```rust
+let dx = f64x4::from([c0.x, c1.x, c2.x, c3.x]) - central_x;
+let dy = f64x4::from([c0.y, c1.y, c2.y, c3.y]) - central_y;
+let dz = f64x4::from([c0.z, c1.z, c2.z, c3.z]) - central_z;
+let dist_sq = dx*dx + dy*dy + dz*dz;
+let sum_r = f64x4::from([r0, r1, r2, r3]) + central_r;
+let mask = dist_sq.cmp_lt(sum_r * sum_r);
+```
+
+#### 3. Fixed-Size Padded Contours
+```rust
+const MAX_CONTOUR: usize = 32;
+struct ContactDescriptor {
+    contour: [ContourPoint; MAX_CONTOUR],  // fixed size, no allocation
+    len: usize,
+}
+```
+
+#### 4. Batch Halfspace Tests in `mark_and_cut_contour`
+Test 4 contour points against a cutting plane simultaneously:
+```rust
+for chunk in contour.chunks(4) {
+    let px = f64x4::from([chunk[0].p.x, chunk[1].p.x, ...]);
+    let dist = (px - plane_x) * n.x + (py - plane_y) * n.y + (pz - plane_z) * n.z;
+}
+```
+
+#### 5. Deferred Cutting with Bitmasks
+Compute all cutting planes first, then batch test each contour point against multiple planes.
+
+### Estimated Impact
+
+| Change | Affected Time | Potential Speedup | Net Improvement |
+|--------|---------------|-------------------|-----------------|
+| Batch collision detection | 8% | 2-3x | 3-5% |
+| Batch halfspace tests | 18% | 2-3x | 6-9% |
+| Fixed-size contours | - | Better cache | 1-2% |
+| **Total** | | | **10-15%** |
+
 ### Verdict
-SIMD would require significant refactoring for marginal gains (~10-15%). The existing Rayon parallelization already provides 5.9x speedup on larger datasets.
+SIMD would require significant refactoring for marginal gains (~10-15%). The existing Rayon parallelization already provides 5.9x speedup on larger datasets. If pursuing SIMD, start with batch collision detection in `find_colliding_ids` as it's isolated and low-risk.
+
+## GPU Compute with wgpu
+
+### Suitability Assessment
+
+| Aspect | GPU Suitability |
+|--------|-----------------|
+| Collision detection (8%) | Good - uniform compute |
+| Contact construction (73%) | Poor - divergent branches |
+| Data size (10k spheres) | Poor - too small |
+| Memory transfer overhead | Poor - would dominate |
+
+### What Could Work
+
+Only collision detection is suitable for GPU offload:
+
+```wgsl
+// WGSL compute shader for batch collision testing
+@group(0) @binding(0) var<storage, read> spheres: array<vec4<f32>>; // xyz + r
+@group(0) @binding(1) var<storage, read> pairs: array<vec2<u32>>;
+@group(0) @binding(2) var<storage, read_write> results: array<u32>;
+
+@compute @workgroup_size(256)
+fn check_collisions(@builtin(global_invocation_id) id: vec3<u32>) {
+    let pair = pairs[id.x];
+    let a = spheres[pair.x];
+    let b = spheres[pair.y];
+    let d = a.xyz - b.xyz;
+    let dist_sq = dot(d, d);
+    let sum_r = a.w + b.w;
+    results[id.x] = select(0u, 1u, dist_sq < sum_r * sum_r);
+}
+```
+
+### Hybrid Architecture
+
+```
+CPU                              GPU
+─────────────────────────────────────────────
+spheres[] ──────────────────────► buffer
+                                     │
+                              ┌──────▼──────┐
+                              │  Collision  │
+                              │   detect    │
+                              └──────┬──────┘
+                                     │
+collision_pairs[] ◄──────────────────┘
+         │
+┌────────▼────────┐
+│ Contact constr. │  ← Keep on CPU (too branchy)
+└─────────────────┘
+```
+
+### Cost-Benefit Analysis
+
+| Factor | Value |
+|--------|-------|
+| Kernel launch overhead | ~50-100µs per dispatch |
+| Buffer transfer (10k spheres) | ~10-20µs |
+| Current collision time | ~2.4ms (8% of 30ms) |
+| Potential GPU collision time | ~0.1-0.5ms |
+| **Net savings** | **~2ms per call** |
+
+### Verdict
+
+**Marginal benefit for current workload sizes.**
+
+- wgpu adds ~500 lines of boilerplate
+- Only collision detection (8% of runtime) is GPU-suitable
+- Break-even point: ~50k+ spheres
+
+**Worth it if:** Processing 50k+ spheres regularly, or building toward larger molecular systems.
+
+**Not worth it if:** Current performance is acceptable, typical workloads <20k spheres.
 
 ## Recommendations
 
