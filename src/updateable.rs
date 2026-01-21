@@ -467,7 +467,7 @@ impl UpdateableTessellation {
 
         for (id_a, neighbors) in all_collisions.iter().enumerate().take(n) {
             let a_involved = involvement.is_none_or(|inv| inv.get(id_a).copied().unwrap_or(false));
-            if !a_involved || exclusion_statuses.get(id_a).copied().unwrap_or(0) != 0 {
+            if !a_involved || exclusion_statuses.get(id_a).copied().unwrap_or(false) {
                 continue;
             }
 
@@ -477,7 +477,11 @@ impl UpdateableTessellation {
 
                 let b_involved =
                     involvement.is_none_or(|inv| inv.get(id_b_canonical).copied().unwrap_or(false));
-                if !b_involved || exclusion_statuses.get(id_b_canonical).copied().unwrap_or(0) != 0
+                if !b_involved
+                    || exclusion_statuses
+                        .get(id_b_canonical)
+                        .copied()
+                        .unwrap_or(false)
                 {
                     continue;
                 }

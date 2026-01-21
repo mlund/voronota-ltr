@@ -100,7 +100,8 @@ impl GridParameters {
 /// Result of collision search
 pub struct CollisionResult {
     pub colliding_ids: Vec<ValuedId>,
-    pub exclusion_status: i32,
+    /// Whether this sphere is excluded (contained within another).
+    pub excluded: bool,
 }
 
 /// Grid-based spatial index for finding sphere collisions
@@ -253,7 +254,7 @@ impl SpheresSearcher {
     pub fn find_colliding_ids(&self, central_id: usize, discard_hidden: bool) -> CollisionResult {
         let mut result = CollisionResult {
             colliding_ids: Vec::new(),
-            exclusion_status: 0,
+            excluded: false,
         };
 
         if central_id >= self.spheres.len() {
@@ -297,7 +298,7 @@ impl SpheresSearcher {
                                         || central_id > id)
                                 {
                                     result.colliding_ids.clear();
-                                    result.exclusion_status = 1;
+                                    result.excluded = true;
                                     return result;
                                 }
 
@@ -354,7 +355,7 @@ mod tests {
         let searcher = SpheresSearcher::new(spheres);
         let result = searcher.find_colliding_ids(0, true);
 
-        assert_eq!(result.exclusion_status, 1);
+        assert!(result.excluded);
         assert!(result.colliding_ids.is_empty());
     }
 }

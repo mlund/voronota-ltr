@@ -24,8 +24,8 @@ pub struct SpheresContainer {
     periodic_box: Option<PeriodicBox>,
     /// Spheres including periodic copies (27x for periodic case)
     populated_spheres: Vec<Sphere>,
-    /// Exclusion status for each populated sphere (0 = active, >0 = excluded)
-    exclusion_statuses: Vec<i32>,
+    /// Whether each populated sphere is excluded (contained within another).
+    exclusion_statuses: Vec<bool>,
     /// Collision lists per input sphere
     colliding_ids: Vec<Vec<ValuedId>>,
     total_collisions: usize,
@@ -51,7 +51,7 @@ impl SpheresContainer {
         self.periodic_box = periodic_box;
 
         self.populate_spheres();
-        self.exclusion_statuses = vec![0; self.populated_spheres.len()];
+        self.exclusion_statuses = vec![false; self.populated_spheres.len()];
         self.searcher = Some(SpheresSearcher::new(self.populated_spheres.clone()));
 
         self.detect_all_collisions();
@@ -181,12 +181,11 @@ impl SpheresContainer {
             return None;
         }
 
-        let current_excluded = self.exclusion_statuses[id] > 0;
-        if current_excluded == excluded {
+        if self.exclusion_statuses[id] == excluded {
             return None;
         }
 
-        self.exclusion_statuses[id] = i32::from(excluded);
+        self.exclusion_statuses[id] = excluded;
         self.set_exclusion_status_periodic_instances(id);
 
         // Collect affected IDs
@@ -222,13 +221,13 @@ impl SpheresContainer {
     }
 
     #[inline]
-    pub fn exclusion_statuses(&self) -> &[i32] {
+    pub fn exclusion_statuses(&self) -> &[bool] {
         &self.exclusion_statuses
     }
 
     #[inline]
     pub fn is_excluded(&self, id: usize) -> bool {
-        id < self.exclusion_statuses.len() && self.exclusion_statuses[id] > 0
+        id < self.exclusion_statuses.len() && self.exclusion_statuses[id]
     }
 
     #[inline]
@@ -360,13 +359,13 @@ impl SpheresContainer {
                 .into_par_iter()
                 .map(|id| {
                     let result = searcher.find_colliding_ids(id, true);
-                    (id, result.colliding_ids, result.exclusion_status)
+                    (id, result.colliding_ids, result.excluded)
                 })
                 .collect();
 
-            for (id, collisions, excl_status) in results {
+            for (id, collisions, excluded) in results {
                 self.colliding_ids[id] = collisions;
-                self.exclusion_statuses[id] = excl_status;
+                self.exclusion_statuses[id] = excluded;
             }
 
             if self.periodic_box.is_some() {
@@ -386,13 +385,13 @@ impl SpheresContainer {
                 .par_iter()
                 .map(|&id| {
                     let result = searcher.find_colliding_ids(id, true);
-                    (id, result.colliding_ids, result.exclusion_status)
+                    (id, result.colliding_ids, result.excluded)
                 })
                 .collect();
 
-            for (id, collisions, excl_status) in results {
+            for (id, collisions, excluded) in results {
                 self.colliding_ids[id] = collisions;
-                self.exclusion_statuses[id] = excl_status;
+                self.exclusion_statuses[id] = excluded;
             }
 
             if self.periodic_box.is_some() {

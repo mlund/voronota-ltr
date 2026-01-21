@@ -54,7 +54,7 @@ fn compute_standard(balls: &[Ball], probe: f64, groups: Option<&[i32]>) -> Tesse
         .into_par_iter()
         .map(|id| {
             let result = searcher.find_colliding_ids(id, true);
-            (id, result.colliding_ids, result.exclusion_status)
+            (id, result.colliding_ids, result.excluded)
         })
         .collect();
 
@@ -165,7 +165,7 @@ fn compute_periodic(
         .into_par_iter()
         .map(|id| {
             let result = searcher.find_colliding_ids(id, true);
-            (id, result.colliding_ids, result.exclusion_status)
+            (id, result.colliding_ids, result.excluded)
         })
         .collect();
 
