@@ -254,6 +254,18 @@ impl ContactDescriptorSummary {
     }
 }
 
+/// Processing stage for cell contact summaries.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum CellStage {
+    /// Initial state, no contacts added yet.
+    #[default]
+    Init,
+    /// Contacts have been added, ready for SAS computation.
+    ContactsAdded,
+    /// SAS area and volume have been computed.
+    SasComputed,
+}
+
 /// Cell contact summary for computing SAS area and volume.
 #[derive(Debug, Clone)]
 pub struct CellContactSummary {
@@ -277,8 +289,8 @@ pub struct CellContactSummary {
     pub sas_inside_volume: f64,
     /// Number of contacts added to this summary.
     pub count: usize,
-    /// Processing stage: 0=init, 1=contacts added, 2=SAS computed.
-    pub stage: i32,
+    /// Processing stage.
+    pub stage: CellStage,
 }
 
 impl Default for CellContactSummary {
@@ -294,7 +306,7 @@ impl Default for CellContactSummary {
             sas_area: 0.0,
             sas_inside_volume: 0.0,
             count: 0,
-            stage: 0,
+            stage: CellStage::Init,
         }
     }
 }
@@ -316,14 +328,14 @@ impl CellContactSummary {
             self.explained_solid_angle_negative -= solid_angle.min(0.0);
             self.explained_pyramid_volume_positive += pyramid_volume.max(0.0);
             self.explained_pyramid_volume_negative -= pyramid_volume.min(0.0);
-            self.stage = 1;
+            self.stage = CellStage::ContactsAdded;
         }
     }
 
     #[allow(dead_code)]
     pub fn add_with_id(&mut self, new_id: usize, cds: &ContactDescriptorSummary) {
         if cds.area > 0.0 {
-            if self.stage == 0 {
+            if self.stage == CellStage::Init {
                 self.id = new_id;
             }
             self.add(cds);
@@ -333,7 +345,7 @@ impl CellContactSummary {
     pub fn compute_sas(&mut self, r: f64) {
         use std::f64::consts::PI;
 
-        if self.stage != 1 {
+        if self.stage != CellStage::ContactsAdded {
             return;
         }
 
@@ -367,18 +379,18 @@ impl CellContactSummary {
             self.sas_inside_volume =
                 self.explained_pyramid_volume_positive - self.explained_pyramid_volume_negative;
         }
-        self.stage = 2;
+        self.stage = CellStage::SasComputed;
     }
 
     /// Compute SAS for a detached (non-contacting) sphere
     pub fn compute_sas_detached(&mut self, new_id: usize, r: f64) {
         use std::f64::consts::PI;
 
-        if self.stage == 0 {
+        if self.stage == CellStage::Init {
             self.id = new_id;
             self.sas_area = 4.0 * PI * r * r;
             self.sas_inside_volume = self.sas_area * r / 3.0;
-            self.stage = 2;
+            self.stage = CellStage::SasComputed;
         }
     }
 }

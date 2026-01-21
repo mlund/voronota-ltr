@@ -3,8 +3,8 @@ use rayon::prelude::*;
 use crate::contact::construct_contact_descriptor;
 use crate::spheres_searcher::SpheresSearcher;
 use crate::types::{
-    Ball, Cell, CellContactSummary, Contact, ContactDescriptorSummary, PeriodicBox, Sphere,
-    TessellationResult, ValuedId,
+    Ball, Cell, CellContactSummary, CellStage, Contact, ContactDescriptorSummary, PeriodicBox,
+    Sphere, TessellationResult, ValuedId,
 };
 
 /// Compute radical tessellation contacts and cells.
@@ -331,16 +331,16 @@ fn compute_cells(
 
     // Compute SAS for each cell
     for (i, cs) in cell_summaries.iter_mut().enumerate() {
-        if cs.stage == 1 {
+        if cs.stage == CellStage::ContactsAdded {
             cs.compute_sas(spheres[i].r);
-        } else if cs.stage == 0 && all_collisions[i].is_empty() {
+        } else if cs.stage == CellStage::Init && all_collisions[i].is_empty() {
             cs.compute_sas_detached(i, spheres[i].r);
         }
     }
 
     cell_summaries
         .into_iter()
-        .filter(|cs| cs.stage == 2)
+        .filter(|cs| cs.stage == CellStage::SasComputed)
         .map(|cs| Cell {
             index: cs.id,
             sas_area: cs.sas_area,

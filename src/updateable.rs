@@ -10,8 +10,8 @@ use serde::{Deserialize, Serialize};
 use crate::contact::construct_contact_descriptor;
 use crate::spheres_container::SpheresContainer;
 use crate::types::{
-    Ball, Cell, CellContactSummary, Contact, ContactDescriptorSummary, PeriodicBox, Sphere,
-    TessellationResult,
+    Ball, Cell, CellContactSummary, CellStage, Contact, ContactDescriptorSummary, PeriodicBox,
+    Sphere, TessellationResult,
 };
 
 /// Result of updateable tessellation with per-sphere contact storage.
@@ -307,7 +307,7 @@ impl UpdateableTessellation {
         let cells: Vec<Cell> = (0..n)
             .filter_map(|i| {
                 let cs = &self.state.cell_summaries[i];
-                if cs.stage == 2 {
+                if cs.stage == CellStage::SasComputed {
                     Some(Cell {
                         index: cs.id,
                         sas_area: cs.sas_area,
@@ -614,9 +614,9 @@ impl UpdateableTessellation {
             .zip(spheres.iter())
             .enumerate()
         {
-            if cs.stage == 1 {
+            if cs.stage == CellStage::ContactsAdded {
                 cs.compute_sas(sphere.r);
-            } else if cs.stage == 0
+            } else if cs.stage == CellStage::Init
                 && !self.state.container.is_excluded(i)
                 && self.state.container.colliding_ids(i).is_empty()
             {
@@ -647,9 +647,9 @@ impl UpdateableTessellation {
             }
 
             // Compute SAS
-            if cs.stage == 1 {
+            if cs.stage == CellStage::ContactsAdded {
                 cs.compute_sas(spheres[sphere_id].r);
-            } else if cs.stage == 0 && !self.state.container.is_excluded(sphere_id) {
+            } else if cs.stage == CellStage::Init && !self.state.container.is_excluded(sphere_id) {
                 // Check if sphere has any non-excluded neighbors with contacts
                 // If no contacts and not excluded, treat as detached
                 let has_active_contacts =
@@ -670,7 +670,7 @@ impl UpdateableTessellation {
             .state
             .cell_summaries
             .iter()
-            .filter(|cs| cs.stage == 2)
+            .filter(|cs| cs.stage == CellStage::SasComputed)
             .map(|cs| Cell {
                 index: cs.id,
                 sas_area: cs.sas_area,
