@@ -528,7 +528,7 @@ impl UpdateableTessellation {
 
         // For periodic, deduplicate for contact storage but keep originals for cells
         if periodic {
-            let deduped = Self::deduplicate_periodic_contacts(&summaries, n);
+            let deduped = Self::deduplicate_and_canonicalize_contacts(&summaries, n);
             (summaries, deduped)
         } else {
             (summaries.clone(), summaries)
@@ -546,61 +546,19 @@ impl UpdateableTessellation {
         deduped
     }
 
-    /// Deduplicate periodic boundary contacts following C++ algorithm.
-    fn deduplicate_periodic_contacts(
+    /// Deduplicate and canonicalize periodic boundary contacts.
+    fn deduplicate_and_canonicalize_contacts(
         summaries: &[ContactDescriptorSummary],
         n: usize,
     ) -> Vec<ContactDescriptorSummary> {
-        // Build map from canonical spheres to boundary contacts involving them
-        let mut sphere_to_boundary_contacts: Vec<Vec<usize>> = vec![Vec::new(); n];
-        for (i, summary) in summaries.iter().enumerate() {
-            if summary.id_a >= n || summary.id_b >= n {
-                sphere_to_boundary_contacts[summary.id_a % n].push(i);
-                sphere_to_boundary_contacts[summary.id_b % n].push(i);
-            }
-        }
-
-        // For each contact, determine its canonical index
-        let mut canonical_ids: Vec<usize> = (0..summaries.len()).collect();
-
-        for (i, summary) in summaries.iter().enumerate() {
-            if summary.id_a >= n || summary.id_b >= n {
-                let sphere_id_a = summary.id_a % n;
-                let sphere_id_b = summary.id_b % n;
-
-                let candidates = if sphere_to_boundary_contacts[sphere_id_a].len()
-                    <= sphere_to_boundary_contacts[sphere_id_b].len()
-                {
-                    &sphere_to_boundary_contacts[sphere_id_a]
-                } else {
-                    &sphere_to_boundary_contacts[sphere_id_b]
-                };
-
-                for &candidate_idx in candidates {
-                    let candidate = &summaries[candidate_idx];
-                    let cand_a = candidate.id_a % n;
-                    let cand_b = candidate.id_b % n;
-                    if (cand_a == sphere_id_a && cand_b == sphere_id_b)
-                        || (cand_a == sphere_id_b && cand_b == sphere_id_a)
-                    {
-                        canonical_ids[i] = candidate_idx;
-                        break;
-                    }
-                }
-            }
-        }
-
-        // Keep only contacts where canonical_id == index, then canonicalize IDs
-        summaries
-            .iter()
-            .enumerate()
-            .filter(|(i, _)| canonical_ids[*i] == *i)
-            .map(|(_, s)| {
-                let mut cs = s.clone();
-                cs.id_a = s.id_a % n;
-                cs.id_b = s.id_b % n;
-                cs.ensure_ids_ordered();
-                cs
+        use crate::tessellation::deduplicate_periodic_contacts;
+        deduplicate_periodic_contacts(summaries, n)
+            .into_iter()
+            .map(|mut s| {
+                s.id_a %= n;
+                s.id_b %= n;
+                s.ensure_ids_ordered();
+                s
             })
             .collect()
     }

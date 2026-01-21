@@ -225,7 +225,8 @@ fn compute_periodic(
 /// Deduplicate periodic boundary contacts following C++ algorithm.
 /// For boundary contacts (where one ID is a periodic image >= n), find the first
 /// contact with the same canonical pair and keep only that one.
-fn deduplicate_periodic_contacts(
+/// Returns summaries with original (non-canonicalized) IDs.
+pub fn deduplicate_periodic_contacts(
     summaries: &[ContactDescriptorSummary],
     n: usize,
 ) -> Vec<ContactDescriptorSummary> {
