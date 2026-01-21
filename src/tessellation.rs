@@ -146,7 +146,7 @@ fn compute_periodic(
     let input_spheres: Vec<Sphere> = balls.iter().map(|b| Sphere::from_ball(b, probe)).collect();
 
     // Create 27 periodic images and build spatial index
-    let populated_spheres = populate_periodic_spheres(&input_spheres, periodic_box);
+    let populated_spheres = periodic_box.populate_periodic_spheres(&input_spheres);
     let searcher = SpheresSearcher::new(populated_spheres);
 
     // Find collisions for original spheres only (indices 0..n)
@@ -279,35 +279,6 @@ pub fn deduplicate_periodic_contacts(
         .filter(|(i, _)| canonical_ids[*i] == *i)
         .map(|(_, s)| s.clone())
         .collect()
-}
-
-/// Generate 27 periodic copies of each sphere (original + 26 shifts)
-fn populate_periodic_spheres(spheres: &[Sphere], pbox: &PeriodicBox) -> Vec<Sphere> {
-    let n = spheres.len();
-    let mut result = Vec::with_capacity(n * 27);
-
-    // First, add original spheres (index 0..n)
-    result.extend_from_slice(spheres);
-
-    // Then add 26 shifted copies (indices n..27n)
-    for sx in -1..=1i32 {
-        for sy in -1..=1i32 {
-            for sz in -1..=1i32 {
-                if sx != 0 || sy != 0 || sz != 0 {
-                    for s in spheres {
-                        result.push(pbox.shift_sphere(
-                            s,
-                            f64::from(sx),
-                            f64::from(sy),
-                            f64::from(sz),
-                        ));
-                    }
-                }
-            }
-        }
-    }
-
-    result
 }
 
 /// Collect collision pairs for periodic case.

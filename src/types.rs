@@ -185,6 +185,34 @@ impl PeriodicBox {
             r: s.r,
         }
     }
+
+    /// The 26 periodic shift combinations (3x3x3 grid excluding origin).
+    #[rustfmt::skip]
+    pub const NEIGHBOR_SHIFTS: [(i32, i32, i32); 26] = [
+        (-1, -1, -1), (-1, -1, 0), (-1, -1, 1),
+        (-1,  0, -1), (-1,  0, 0), (-1,  0, 1),
+        (-1,  1, -1), (-1,  1, 0), (-1,  1, 1),
+        ( 0, -1, -1), ( 0, -1, 0), ( 0, -1, 1),
+        ( 0,  0, -1),             ( 0,  0, 1),
+        ( 0,  1, -1), ( 0,  1, 0), ( 0,  1, 1),
+        ( 1, -1, -1), ( 1, -1, 0), ( 1, -1, 1),
+        ( 1,  0, -1), ( 1,  0, 0), ( 1,  0, 1),
+        ( 1,  1, -1), ( 1,  1, 0), ( 1,  1, 1),
+    ];
+
+    /// Generate all 27 periodic copies of spheres (original + 26 shifts).
+    pub(crate) fn populate_periodic_spheres(&self, spheres: &[Sphere]) -> Vec<Sphere> {
+        let n = spheres.len();
+        let mut result = Vec::with_capacity(n * 27);
+        result.extend_from_slice(spheres);
+
+        for (sx, sy, sz) in Self::NEIGHBOR_SHIFTS {
+            for s in spheres {
+                result.push(self.shift_sphere(s, f64::from(sx), f64::from(sy), f64::from(sz)));
+            }
+        }
+        result
+    }
 }
 
 /// Internal contact descriptor summary (matches C++ `ContactDescriptorSummary`)

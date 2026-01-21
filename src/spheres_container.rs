@@ -323,28 +323,8 @@ impl SpheresContainer {
 
     /// Create populated spheres including periodic images.
     fn populate_spheres(&mut self) {
-        let n = self.spheres.len();
-
         if let Some(ref pbox) = self.periodic_box {
-            self.populated_spheres = Vec::with_capacity(n * 27);
-            self.populated_spheres.extend_from_slice(&self.spheres);
-
-            for sx in -1..=1i32 {
-                for sy in -1..=1i32 {
-                    for sz in -1..=1i32 {
-                        if sx != 0 || sy != 0 || sz != 0 {
-                            for s in &self.spheres {
-                                self.populated_spheres.push(pbox.shift_sphere(
-                                    s,
-                                    f64::from(sx),
-                                    f64::from(sy),
-                                    f64::from(sz),
-                                ));
-                            }
-                        }
-                    }
-                }
-            }
+            self.populated_spheres = pbox.populate_periodic_spheres(&self.spheres);
         } else {
             self.populated_spheres = self.spheres.clone();
         }
@@ -361,23 +341,15 @@ impl SpheresContainer {
         changed_ids.push(id);
 
         if let Some(ref pbox) = self.periodic_box {
-            let mut g = 1usize;
-            for sx in -1..=1i32 {
-                for sy in -1..=1i32 {
-                    for sz in -1..=1i32 {
-                        if sx != 0 || sy != 0 || sz != 0 {
-                            let shifted_id = g * n + id;
-                            self.populated_spheres[shifted_id] = pbox.shift_sphere(
-                                &self.spheres[id],
-                                f64::from(sx),
-                                f64::from(sy),
-                                f64::from(sz),
-                            );
-                            changed_ids.push(shifted_id);
-                            g += 1;
-                        }
-                    }
-                }
+            for (g, (sx, sy, sz)) in PeriodicBox::NEIGHBOR_SHIFTS.iter().enumerate() {
+                let shifted_id = (g + 1) * n + id;
+                self.populated_spheres[shifted_id] = pbox.shift_sphere(
+                    &self.spheres[id],
+                    f64::from(*sx),
+                    f64::from(*sy),
+                    f64::from(*sz),
+                );
+                changed_ids.push(shifted_id);
             }
         }
     }
