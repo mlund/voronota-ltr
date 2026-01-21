@@ -67,7 +67,7 @@ impl GridParameters {
             return params;
         }
 
-        // Box size = max(2*r + 0.25) across all spheres
+        // Box size = max(2*r + margin): ensures overlapping spheres are in adjacent cells
         for s in spheres {
             params.box_size = params.box_size.max(s.r.mul_add(2.0, 0.25));
         }
@@ -267,7 +267,7 @@ impl SpheresSearcher {
             &self.grid_params.grid_offset,
         );
 
-        // Search 27-cell neighborhood (3x3x3)
+        // Search 27-cell neighborhood (3x3x3) to catch all potential overlaps
         for dx in -1..=1 {
             for dy in -1..=1 {
                 for dz in -1..=1 {

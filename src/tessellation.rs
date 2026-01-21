@@ -39,7 +39,8 @@ pub fn compute_tessellation(
     }
 }
 
-/// Standard (non-periodic) tessellation
+/// Standard (non-periodic) tessellation.
+/// Uses spatial grid to find neighbors, then computes contacts in parallel.
 fn compute_standard(balls: &[Ball], probe: f64, groups: Option<&[i32]>) -> TessellationResult {
     if balls.is_empty() {
         return TessellationResult::default();
@@ -126,7 +127,9 @@ fn same_group(groups: Option<&[i32]>, a: usize, b: usize) -> bool {
     }
 }
 
-/// Periodic boundary tessellation
+/// Periodic boundary tessellation.
+/// Creates 27 periodic images (3x3x3 grid) to handle boundary crossings,
+/// then deduplicates contacts that appear in multiple images.
 fn compute_periodic(
     balls: &[Ball],
     probe: f64,

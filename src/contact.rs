@@ -89,7 +89,10 @@ impl ContactDescriptor {
     }
 }
 
-/// Construct contact descriptor between spheres a and b
+/// Construct contact descriptor between spheres a and b.
+///
+/// Uses a contour-cutting algorithm: starts with a hexagonal approximation of the
+/// intersection circle, then iteratively cuts it with planes from neighboring spheres.
 #[allow(clippy::too_many_lines)]
 pub fn construct_contact_descriptor(
     spheres: &[Sphere],

@@ -108,6 +108,7 @@ impl PartialOrd for ValuedId {
 
 impl Ord for ValuedId {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        // Sort by distance first; fall back to index for NaN or ties to ensure stable ordering
         match self.value.partial_cmp(&other.value) {
             Some(std::cmp::Ordering::Equal) | None => self.index.cmp(&other.index),
             Some(ord) => ord,
