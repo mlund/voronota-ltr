@@ -63,7 +63,7 @@ fn compute_standard(balls: &[Ball], probe: f64, groups: Option<&[i32]>) -> Tesse
         .map(|(_, collisions, _)| collisions)
         .collect();
 
-    let collision_pairs = collect_collision_pairs(&all_collisions, groups);
+    let collision_pairs = collect_collision_pairs(&all_collisions, groups, None);
 
     let contact_summaries: Vec<Option<ContactDescriptorSummary>> = collision_pairs
         .par_iter()
@@ -101,16 +101,27 @@ fn compute_standard(balls: &[Ball], probe: f64, groups: Option<&[i32]>) -> Tesse
     TessellationResult { contacts, cells }
 }
 
-/// Collect unique collision pairs, optionally filtering by group
+/// Collect unique collision pairs, optionally filtering by group.
+///
+/// For periodic boundaries, pass `Some(n)` where n is the number of original spheres.
+/// Periodic images (id >= n) are always included; deduplication happens after contact computation.
 fn collect_collision_pairs(
     all_collisions: &[Vec<ValuedId>],
     groups: Option<&[i32]>,
+    periodic_n: Option<usize>,
 ) -> Vec<(usize, usize)> {
     let mut pairs = Vec::new();
     for (a_id, neighbors) in all_collisions.iter().enumerate() {
         for neighbor in neighbors {
             let b_id = neighbor.index;
-            if a_id < b_id && !same_group(groups, a_id, b_id) {
+            let b_canonical = periodic_n.map_or(b_id, |n| b_id % n);
+
+            if same_group(groups, a_id, b_canonical) {
+                continue;
+            }
+
+            // Include periodic images unconditionally; canonical pairs use a < b ordering
+            if periodic_n.is_some_and(|n| b_id >= n) || a_id < b_id {
                 pairs.push((a_id, b_id));
             }
         }
@@ -165,7 +176,7 @@ fn compute_periodic(
         .collect();
 
     // Collect collision pairs (includes potential duplicates for boundary contacts)
-    let collision_pairs = collect_periodic_collision_pairs(&all_collisions, n, groups);
+    let collision_pairs = collect_collision_pairs(&all_collisions, groups, Some(n));
 
     // Construct contact descriptors in parallel
     // Keep ORIGINAL IDs in summary - do NOT canonicalize until after deduplication
@@ -279,38 +290,6 @@ pub fn deduplicate_periodic_contacts(
         .filter(|(i, _)| canonical_ids[*i] == *i)
         .map(|(_, s)| s.clone())
         .collect()
-}
-
-/// Collect collision pairs for periodic case.
-/// Includes all pairs - deduplication happens after contact computation.
-fn collect_periodic_collision_pairs(
-    all_collisions: &[Vec<ValuedId>],
-    n: usize,
-    groups: Option<&[i32]>,
-) -> Vec<(usize, usize)> {
-    let mut pairs = Vec::new();
-
-    for (a_id, neighbors) in all_collisions.iter().enumerate() {
-        for neighbor in neighbors {
-            let b_id = neighbor.index;
-            let b_canonical = b_id % n;
-
-            // Skip if same group (use canonical indices for group lookup)
-            if same_group(groups, a_id, b_canonical) {
-                continue;
-            }
-
-            if b_id >= n {
-                // Periodic image - include all (will dedupe later)
-                pairs.push((a_id, b_id));
-            } else if a_id < b_id {
-                // Both canonical - use simple ordering
-                pairs.push((a_id, b_id));
-            }
-        }
-    }
-
-    pairs
 }
 
 /// Compute cell SAS areas and volumes from contact summaries.
