@@ -243,34 +243,31 @@ fn generate_solvent_spheres(
     params: &SolventSpheresParams,
 ) -> Vec<SolventSphere> {
     let sih = SubdividedIcosahedron::new(params.subdivision_depth);
-    let mut solvent_spheres = Vec::new();
 
-    for cell in &result.cells {
-        if cell.sas_area <= 0.0 {
-            continue;
-        }
+    result
+        .cells
+        .iter()
+        .filter(|cell| cell.sas_area > 0.0)
+        .flat_map(|cell| {
+            let atom = &balls[cell.index];
+            let atom_neighbors = &neighbors[cell.index];
+            let center = ball_center(atom);
+            let surface_radius = atom.r + params.probe;
+            let probe = params.probe;
+            let parent_index = cell.index;
 
-        let atom = &balls[cell.index];
-        let atom_neighbors = &neighbors[cell.index];
-
-        let center = ball_center(atom);
-        let surface_radius = atom.r + params.probe;
-
-        for sample_point in sih.points_on_sphere(center, surface_radius) {
-            if is_valid_solvent_position(&sample_point, atom, atom_neighbors, balls) {
-                solvent_spheres.push(SolventSphere {
-                    x: sample_point.x,
-                    y: sample_point.y,
-                    z: sample_point.z,
-                    radius: params.probe,
+            sih.points_on_sphere(center, surface_radius)
+                .filter(move |p| is_valid_solvent_position(p, atom, atom_neighbors, balls))
+                .map(move |p| SolventSphere {
+                    x: p.x,
+                    y: p.y,
+                    z: p.z,
+                    radius: probe,
                     weight: 0.0,
-                    parent_index: cell.index,
-                });
-            }
-        }
-    }
-
-    solvent_spheres
+                    parent_index,
+                })
+        })
+        .collect()
 }
 
 /// Check if sample point is closer to its parent atom than all neighbors.

@@ -283,21 +283,26 @@ impl UpdateableTessellation {
     #[must_use]
     pub fn summary(&self) -> TessellationResult {
         let n = self.state.result.contacts_by_sphere.len();
-        let mut contacts = Vec::new();
 
         // Collect unique contacts (only where id_a == sphere_id to avoid duplicates)
-        for (i, sphere_contacts) in self.state.result.contacts_by_sphere.iter().enumerate() {
-            for cds in sphere_contacts {
-                if cds.id_a == i {
-                    contacts.push(Contact {
+        let contacts: Vec<Contact> = self
+            .state
+            .result
+            .contacts_by_sphere
+            .iter()
+            .enumerate()
+            .flat_map(|(i, sphere_contacts)| {
+                sphere_contacts
+                    .iter()
+                    .filter(move |cds| cds.id_a == i)
+                    .map(|cds| Contact {
                         id_a: cds.id_a,
                         id_b: cds.id_b,
                         area: cds.area,
                         arc_length: cds.arc_length,
-                    });
-                }
-            }
-        }
+                    })
+            })
+            .collect();
 
         let cells: Vec<Cell> = (0..n)
             .filter_map(|i| {
