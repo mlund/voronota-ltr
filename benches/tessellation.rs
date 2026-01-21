@@ -1,6 +1,6 @@
 use criterion::{BenchmarkId, Criterion, Throughput, black_box, criterion_group, criterion_main};
-use voronotalt::{Ball, PeriodicBox, compute_tessellation};
 use std::fs;
+use voronotalt::{Ball, PeriodicBox, UpdateableTessellation, compute_tessellation};
 
 /// Parse xyzr file - last 4 numeric columns are x, y, z, r
 fn parse_xyzr(content: &str) -> Vec<Ball> {
@@ -104,10 +104,88 @@ fn bench_tessellation_with_groups(c: &mut Criterion) {
     group.finish();
 }
 
+fn bench_updateable(c: &mut Criterion) {
+    let balls = load_balls("balls_2zsk");
+    let probe = 1.4;
+    let n = balls.len();
+
+    let mut group = c.benchmark_group("updateable");
+    group.throughput(Throughput::Elements(n as u64));
+
+    group.bench_function("init/balls_2zsk", |b| {
+        b.iter(|| {
+            let mut t = UpdateableTessellation::new();
+            t.init(black_box(&balls), black_box(probe), None)
+        })
+    });
+
+    // Pre-initialize for update benchmarks
+    let mut tess = UpdateableTessellation::new();
+    tess.init(&balls, probe, None);
+
+    let mut modified = balls.clone();
+
+    group.bench_function("update_2/balls_2zsk", |b| {
+        b.iter(|| {
+            // Perturb 2 balls
+            modified[0].x += 0.01;
+            modified[1].x += 0.01;
+            tess.update_with_changed(black_box(&modified), black_box(&[0, 1]))
+        })
+    });
+
+    group.bench_function("update_10/balls_2zsk", |b| {
+        let changed: Vec<usize> = (0..10).collect();
+        b.iter(|| {
+            for &id in &changed {
+                modified[id].x += 0.01;
+            }
+            tess.update_with_changed(black_box(&modified), black_box(&changed))
+        })
+    });
+
+    group.finish();
+}
+
+fn bench_updateable_vs_full(c: &mut Criterion) {
+    let balls = load_balls("balls_2zsk");
+    let probe = 1.4;
+
+    let mut group = c.benchmark_group("updateable_vs_full");
+
+    // Compare full recompute vs incremental update
+    let mut tess = UpdateableTessellation::new();
+    tess.init(&balls, probe, None);
+
+    let mut modified = balls.clone();
+
+    // Incremental update of 2 spheres
+    group.bench_function("incremental_2", |b| {
+        b.iter(|| {
+            modified[0].x += 0.01;
+            modified[1].x += 0.01;
+            tess.update_with_changed(black_box(&modified), black_box(&[0, 1]))
+        })
+    });
+
+    // Full recompute for comparison
+    group.bench_function("full_recompute", |b| {
+        b.iter(|| {
+            modified[0].x += 0.01;
+            modified[1].x += 0.01;
+            compute_tessellation(black_box(&modified), black_box(probe), None, None)
+        })
+    });
+
+    group.finish();
+}
+
 criterion_group!(
     benches,
     bench_tessellation,
     bench_tessellation_periodic,
-    bench_tessellation_with_groups
+    bench_tessellation_with_groups,
+    bench_updateable,
+    bench_updateable_vs_full
 );
 criterion_main!(benches);

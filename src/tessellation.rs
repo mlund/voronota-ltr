@@ -159,11 +159,12 @@ fn compute_periodic(
         .map(|(_, collisions, _)| collisions)
         .collect();
 
-    // Collect unique collision pairs
-    // For periodic: (a, b) where a is canonical (0..n) and b can be periodic image
+    // Collect collision pairs (includes potential duplicates for boundary contacts)
     let collision_pairs = collect_periodic_collision_pairs(&all_collisions, n, groups);
 
     // Construct contact descriptors in parallel
+    // Keep ORIGINAL IDs in summary - do NOT canonicalize until after deduplication
+    // This matches C++ behavior where ensure_ids_ordered() just orders, not canonicalizes
     let contact_summaries: Vec<Option<ContactDescriptorSummary>> = collision_pairs
         .par_iter()
         .map(|&(a_id, b_id)| {
@@ -174,36 +175,105 @@ fn compute_periodic(
                 &all_collisions[a_id],
             )?;
             let mut summary = cd.to_summary();
-            // Map IDs to canonical form
+            // Keep ORIGINAL IDs (b_id may be >= n for periodic images)
             summary.id_a = a_id;
-            summary.id_b = b_id % n;
+            summary.id_b = b_id;
             summary.ensure_ids_ordered();
             Some(summary)
         })
         .collect();
 
     // Filter valid contacts
-    let valid_summaries: Vec<ContactDescriptorSummary> = contact_summaries
+    let all_valid_summaries: Vec<ContactDescriptorSummary> = contact_summaries
         .into_iter()
         .flatten()
         .filter(|s| s.area > 0.0)
         .collect();
 
-    // Build contacts output
-    let contacts: Vec<Contact> = valid_summaries
+    // Compute cells using ALL contacts (including boundary duplicates)
+    // Keep original IDs - the cell computation handles this by only adding
+    // to cells where the ID is canonical (< n)
+    let cells = compute_cells_periodic_with_original_ids(
+        &all_valid_summaries,
+        &input_spheres,
+        &all_collisions,
+        n,
+    );
+
+    // Deduplicate boundary contacts for output
+    let deduped_summaries = deduplicate_periodic_contacts(&all_valid_summaries, n);
+
+    // Build contacts output - canonicalize IDs in final output
+    let contacts: Vec<Contact> = deduped_summaries
         .iter()
         .map(|s| Contact {
-            id_a: s.id_a,
-            id_b: s.id_b,
+            id_a: s.id_a % n,
+            id_b: s.id_b % n,
             area: s.area,
             arc_length: s.arc_length,
         })
         .collect();
 
-    // Compute cells using canonical IDs
-    let cells = compute_cells_periodic(&valid_summaries, &input_spheres, &all_collisions, n);
-
     TessellationResult { contacts, cells }
+}
+
+/// Deduplicate periodic boundary contacts following C++ algorithm.
+/// For boundary contacts (where one ID is a periodic image >= n), find the first
+/// contact with the same canonical pair and keep only that one.
+fn deduplicate_periodic_contacts(
+    summaries: &[ContactDescriptorSummary],
+    n: usize,
+) -> Vec<ContactDescriptorSummary> {
+    // Build map from canonical spheres to boundary contacts involving them
+    let mut sphere_to_boundary_contacts: Vec<Vec<usize>> = vec![Vec::new(); n];
+    for (i, summary) in summaries.iter().enumerate() {
+        // Boundary contact if either ID is a periodic image
+        if summary.id_a >= n || summary.id_b >= n {
+            sphere_to_boundary_contacts[summary.id_a % n].push(i);
+            sphere_to_boundary_contacts[summary.id_b % n].push(i);
+        }
+    }
+
+    // For each contact, determine its canonical index (first contact with same canonical pair)
+    let mut canonical_ids: Vec<usize> = (0..summaries.len()).collect();
+
+    for (i, summary) in summaries.iter().enumerate() {
+        // Only process boundary contacts
+        if summary.id_a >= n || summary.id_b >= n {
+            let sphere_id_a = summary.id_a % n;
+            let sphere_id_b = summary.id_b % n;
+
+            // Search in the smaller candidate list
+            let candidates = if sphere_to_boundary_contacts[sphere_id_a].len()
+                <= sphere_to_boundary_contacts[sphere_id_b].len()
+            {
+                &sphere_to_boundary_contacts[sphere_id_a]
+            } else {
+                &sphere_to_boundary_contacts[sphere_id_b]
+            };
+
+            // Find first contact with same canonical pair
+            for &candidate_idx in candidates {
+                let candidate = &summaries[candidate_idx];
+                let cand_a = candidate.id_a % n;
+                let cand_b = candidate.id_b % n;
+                if (cand_a == sphere_id_a && cand_b == sphere_id_b)
+                    || (cand_a == sphere_id_b && cand_b == sphere_id_a)
+                {
+                    canonical_ids[i] = candidate_idx;
+                    break;
+                }
+            }
+        }
+    }
+
+    // Keep only contacts where canonical_id == index
+    summaries
+        .iter()
+        .enumerate()
+        .filter(|(i, _)| canonical_ids[*i] == *i)
+        .map(|(_, s)| s.clone())
+        .collect()
 }
 
 /// Generate 27 periodic copies of each sphere (original + 26 shifts)
@@ -230,7 +300,8 @@ fn populate_periodic_spheres(spheres: &[Sphere], pbox: &PeriodicBox) -> Vec<Sphe
     result
 }
 
-/// Collect collision pairs for periodic case
+/// Collect collision pairs for periodic case.
+/// Includes all pairs - deduplication happens after contact computation.
 fn collect_periodic_collision_pairs(
     all_collisions: &[Vec<ValuedId>],
     n: usize,
@@ -248,18 +319,9 @@ fn collect_periodic_collision_pairs(
                 continue;
             }
 
-            // Include pair if:
-            // - b is a periodic image (b_id >= n), OR
-            // - b is canonical and a < b (to avoid duplicates)
-            // Also handle self-contacts (a == b_canonical) for periodic images
             if b_id >= n {
-                // Periodic image - always include (dedupe by checking if we're the "smaller" side)
-                if all_collisions[a_id].len() < all_collisions[b_canonical].len()
-                    || (all_collisions[a_id].len() == all_collisions[b_canonical].len()
-                        && a_id <= b_canonical)
-                {
-                    pairs.push((a_id, b_id));
-                }
+                // Periodic image - include all (will dedupe later)
+                pairs.push((a_id, b_id));
             } else if a_id < b_id {
                 // Both canonical - use simple ordering
                 pairs.push((a_id, b_id));
@@ -270,8 +332,10 @@ fn collect_periodic_collision_pairs(
     pairs
 }
 
-/// Compute cells for periodic case
-fn compute_cells_periodic(
+/// Compute cells for periodic case with original (non-canonical) IDs.
+/// Only adds to cells where the ID is canonical (< n), which naturally
+/// handles deduplication for boundary contacts.
+fn compute_cells_periodic_with_original_ids(
     summaries: &[ContactDescriptorSummary],
     spheres: &[Sphere],
     all_collisions: &[Vec<ValuedId>],
@@ -285,10 +349,13 @@ fn compute_cells_periodic(
         .collect();
 
     // Accumulate contributions from contacts
+    // Only add to cells where the ID is canonical (< n)
     for cds in summaries {
         if cds.area > 0.0 {
-            cell_summaries[cds.id_a].add(cds);
-            if cds.id_b != cds.id_a {
+            if cds.id_a < n {
+                cell_summaries[cds.id_a].add(cds);
+            }
+            if cds.id_b < n && cds.id_b != cds.id_a {
                 cell_summaries[cds.id_b].add(cds);
             }
         }

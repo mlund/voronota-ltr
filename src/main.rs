@@ -8,10 +8,12 @@ use voronotalt::{Ball, PeriodicBox, compute_tessellation};
 #[derive(Parser)]
 #[command(name = "voronotalt")]
 #[command(about = "Compute radical Voronoi tessellation of atomic balls")]
-#[command(long_about = "Constructs a radical Voronoi tessellation of atomic balls \
+#[command(
+    long_about = "Constructs a radical Voronoi tessellation of atomic balls \
     constrained inside a solvent-accessible surface defined by a rolling probe. \
     Computes inter-atom contact areas, solvent accessible surface areas, and volumes.\n\n\
-    Input format: .xyzr file with whitespace-separated values, last 4 columns are x y z radius.")]
+    Input format: .xyzr file with whitespace-separated values, last 4 columns are x y z radius."
+)]
 struct Cli {
     /// Rolling probe radius
     #[arg(long, default_value_t = 1.4)]
@@ -97,7 +99,11 @@ fn main() -> io::Result<()> {
 
     if cli.print_contacts {
         for c in &result.contacts {
-            writeln!(stdout, "{} {} {:.6} {:.6}", c.id_a, c.id_b, c.area, c.arc_length)?;
+            writeln!(
+                stdout,
+                "{} {} {:.6} {:.6}",
+                c.id_a, c.id_b, c.area, c.arc_length
+            )?;
         }
     }
 

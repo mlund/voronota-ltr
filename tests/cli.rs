@@ -18,7 +18,10 @@ fn parse_summary(output: &str) -> std::collections::HashMap<String, String> {
         .lines()
         .filter_map(|line| {
             let mut parts = line.splitn(2, ':');
-            Some((parts.next()?.trim().to_string(), parts.next()?.trim().to_string()))
+            Some((
+                parts.next()?.trim().to_string(),
+                parts.next()?.trim().to_string(),
+            ))
         })
         .collect()
 }
@@ -26,7 +29,13 @@ fn parse_summary(output: &str) -> std::collections::HashMap<String, String> {
 #[test]
 fn test_balls_cs_1x1() {
     let output = binary()
-        .args(["-i", "benches/data/balls_cs_1x1.xyzr", "--probe", "2.0", "-q"])
+        .args([
+            "-i",
+            "benches/data/balls_cs_1x1.xyzr",
+            "--probe",
+            "2.0",
+            "-q",
+        ])
         .output()
         .expect("failed to run binary");
 
@@ -36,18 +45,41 @@ fn test_balls_cs_1x1() {
 
     assert_eq!(summary["contacts"], "153");
     assert_eq!(summary["cells"], "100");
-    assert_approx("total_contact_area", summary["total_contact_area"].parse().unwrap(), 3992.55, 1.0);
-    assert_approx("total_sas_area", summary["total_sas_area"].parse().unwrap(), 21979.6, 10.0);
-    assert_approx("total_volume", summary["total_volume"].parse().unwrap(), 46419.9, 10.0);
+    assert_approx(
+        "total_contact_area",
+        summary["total_contact_area"].parse().unwrap(),
+        3992.55,
+        1.0,
+    );
+    assert_approx(
+        "total_sas_area",
+        summary["total_sas_area"].parse().unwrap(),
+        21979.6,
+        10.0,
+    );
+    assert_approx(
+        "total_volume",
+        summary["total_volume"].parse().unwrap(),
+        46419.9,
+        10.0,
+    );
 }
 
 #[test]
 fn test_balls_cs_1x1_periodic() {
     let output = binary()
         .args([
-            "-i", "benches/data/balls_cs_1x1.xyzr",
-            "--probe", "2.0",
-            "--periodic-box-corners", "0", "0", "0", "200", "250", "300",
+            "-i",
+            "benches/data/balls_cs_1x1.xyzr",
+            "--probe",
+            "2.0",
+            "--periodic-box-corners",
+            "0",
+            "0",
+            "0",
+            "200",
+            "250",
+            "300",
             "-q",
         ])
         .output()
@@ -59,9 +91,24 @@ fn test_balls_cs_1x1_periodic() {
 
     assert_eq!(summary["contacts"], "189");
     assert_eq!(summary["cells"], "100");
-    assert_approx("total_contact_area", summary["total_contact_area"].parse().unwrap(), 4812.14, 50.0);
-    assert_approx("total_sas_area", summary["total_sas_area"].parse().unwrap(), 20023.1, 100.0);
-    assert_approx("total_volume", summary["total_volume"].parse().unwrap(), 45173.2, 100.0);
+    assert_approx(
+        "total_contact_area",
+        summary["total_contact_area"].parse().unwrap(),
+        4812.14,
+        50.0,
+    );
+    assert_approx(
+        "total_sas_area",
+        summary["total_sas_area"].parse().unwrap(),
+        20023.1,
+        100.0,
+    );
+    assert_approx(
+        "total_volume",
+        summary["total_volume"].parse().unwrap(),
+        45173.2,
+        100.0,
+    );
 }
 
 #[test]
@@ -106,7 +153,14 @@ fn test_stdin_input() {
 #[test]
 fn test_print_contacts() {
     let output = binary()
-        .args(["-i", "benches/data/balls_cs_1x1.xyzr", "--probe", "2.0", "--print-contacts", "-q"])
+        .args([
+            "-i",
+            "benches/data/balls_cs_1x1.xyzr",
+            "--probe",
+            "2.0",
+            "--print-contacts",
+            "-q",
+        ])
         .output()
         .expect("failed to run binary");
 
@@ -118,13 +172,25 @@ fn test_print_contacts() {
     assert_eq!(parts.len(), 4, "contact line should have 4 columns");
     assert_eq!(parts[0], "0");
     assert_eq!(parts[1], "1");
-    assert_approx("first_contact_area", parts[2].parse().unwrap(), 42.9555, 0.01);
+    assert_approx(
+        "first_contact_area",
+        parts[2].parse().unwrap(),
+        42.9555,
+        0.01,
+    );
 }
 
 #[test]
 fn test_print_cells() {
     let output = binary()
-        .args(["-i", "benches/data/balls_cs_1x1.xyzr", "--probe", "2.0", "--print-cells", "-q"])
+        .args([
+            "-i",
+            "benches/data/balls_cs_1x1.xyzr",
+            "--probe",
+            "2.0",
+            "--print-cells",
+            "-q",
+        ])
         .output()
         .expect("failed to run binary");
 

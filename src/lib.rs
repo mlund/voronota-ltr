@@ -28,9 +28,12 @@
 
 mod contact;
 mod geometry;
+mod spheres_container;
 mod spheres_searcher;
 mod tessellation;
 mod types;
+mod updateable;
 
 pub use tessellation::compute_tessellation;
 pub use types::{Ball, Cell, Contact, PeriodicBox, TessellationResult};
+pub use updateable::{UpdateableResult, UpdateableTessellation};

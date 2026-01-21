@@ -127,6 +127,86 @@ impl SpheresSearcher {
         &self.spheres
     }
 
+    /// Update sphere positions and rebuild spatial index for changed spheres.
+    pub fn update(&mut self, spheres: &[Sphere], changed_ids: &[usize]) {
+        // Update sphere positions
+        for &id in changed_ids {
+            if id < self.spheres.len() && id < spheres.len() {
+                self.spheres[id] = spheres[id];
+            }
+        }
+
+        // Check if grid parameters changed significantly
+        let new_params = GridParameters::new(&self.spheres);
+        if (new_params.box_size - self.grid_params.box_size).abs() > 0.01
+            || new_params.grid_size.x != self.grid_params.grid_size.x
+            || new_params.grid_size.y != self.grid_params.grid_size.y
+            || new_params.grid_size.z != self.grid_params.grid_size.z
+        {
+            // Full rebuild needed
+            self.grid_params = new_params;
+            self.init_boxes();
+        } else {
+            // Incremental update: remove and re-add changed spheres
+            for &id in changed_ids {
+                if id < self.spheres.len() {
+                    self.remove_sphere_from_grid(id);
+                }
+            }
+            for &id in changed_ids {
+                if id < self.spheres.len() {
+                    self.add_sphere_to_grid(id);
+                }
+            }
+        }
+    }
+
+    /// Clone for backup purposes.
+    pub fn clone_for_backup(&self) -> Self {
+        Self {
+            spheres: self.spheres.clone(),
+            grid_params: self.grid_params.clone(),
+            map_of_boxes: self.map_of_boxes.clone(),
+            boxes: self.boxes.clone(),
+        }
+    }
+
+    fn remove_sphere_from_grid(&mut self, sphere_id: usize) {
+        let sphere = &self.spheres[sphere_id];
+        let gp = GridPoint::from_sphere_with_offset(
+            sphere,
+            self.grid_params.box_size,
+            &self.grid_params.grid_offset,
+        );
+        if let Some(index) = gp.index(&self.grid_params.grid_size) {
+            let box_id = self.map_of_boxes[index];
+            if box_id >= 0 {
+                let box_vec = &mut self.boxes[box_id as usize];
+                if let Some(pos) = box_vec.iter().position(|&id| id == sphere_id) {
+                    box_vec.swap_remove(pos);
+                }
+            }
+        }
+    }
+
+    fn add_sphere_to_grid(&mut self, sphere_id: usize) {
+        let sphere = &self.spheres[sphere_id];
+        let gp = GridPoint::from_sphere_with_offset(
+            sphere,
+            self.grid_params.box_size,
+            &self.grid_params.grid_offset,
+        );
+        if let Some(index) = gp.index(&self.grid_params.grid_size) {
+            let box_id = self.map_of_boxes[index];
+            if box_id < 0 {
+                self.map_of_boxes[index] = self.boxes.len() as i32;
+                self.boxes.push(vec![sphere_id]);
+            } else {
+                self.boxes[box_id as usize].push(sphere_id);
+            }
+        }
+    }
+
     fn init_boxes(&mut self) {
         let total_cells = (self.grid_params.grid_size.x
             * self.grid_params.grid_size.y

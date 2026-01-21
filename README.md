@@ -7,7 +7,8 @@ Outputs inter-atom contact areas, solvent accessible surface (SAS) areas, and vo
 
 ## Features
 
-- [x] Basic radical tesselation (stateless)
+- [x] Basic radical tessellation (stateless)
+- [x] Updateable tessellation for incremental updates
 - [x] Periodic boundaries
 - [x] Groupings to avoid internal contacts
 - [x] Parallel processing using Rayon - see benchmarks below
@@ -55,6 +56,36 @@ let balls = vec![Ball::new(0.0, 0.0, 0.0, 1.5)];
 let pbox = PeriodicBox::from_corners((0.0, 0.0, 0.0), (10.0, 10.0, 10.0));
 
 let result = compute_tessellation(&balls, 1.4, Some(&pbox), None);
+```
+
+#### Updateable tessellation
+
+For simulations where only a few spheres change position each step, `UpdateableTessellation`
+provides efficient incremental updates:
+
+```rust
+use voronotalt::{Ball, UpdateableTessellation};
+
+let mut balls = vec![
+    Ball::new(0.0, 0.0, 0.0, 1.0),
+    Ball::new(2.0, 0.0, 0.0, 1.0),
+    Ball::new(4.0, 0.0, 0.0, 1.0),
+];
+
+// Create with backup support for undo
+let mut tess = UpdateableTessellation::with_backup();
+tess.init(&balls, 1.0, None);
+
+// Move first sphere
+balls[0].x += 0.1;
+tess.update_with_changed(&balls, &[0]);  // Only recompute affected contacts
+
+// Get results
+let summary = tess.summary();
+println!("Total contacts: {}", summary.contacts.len());
+
+// Undo last update
+tess.restore();
 ```
 
 ### CLI
