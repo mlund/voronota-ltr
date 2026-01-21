@@ -1,19 +1,22 @@
+[![CI](https://github.com/mlund/voronota-ltr/actions/workflows/ci.yml/badge.svg)](https://github.com/mlund/voronota-ltr/actions/workflows/ci.yml)
+
 # Voronota-LT in Rust
 
-Unofficial Rust port of [voronota-lt](https://github.com/kliment-olechnovic/voronota/tree/master/expansion_lt)
+Experimental Rust port of [voronota-lt](https://github.com/kliment-olechnovic/voronota/tree/master/expansion_lt)
 originally written in C++.
 Computes radical Voronoi tessellation of atomic balls constrained inside a solvent-accessible surface.
 Outputs inter-atom contact areas, solvent accessible surface (SAS) areas, and volumes.
 
 ## Features
 
+- [x] Pure, safe Rust
 - [x] Basic radical tessellation (stateless)
-- [x] Updateable tessellation for incremental updates
+- [x] Updateable tessellation for incremental updates (stateful)
 - [x] Periodic boundaries
+- [x] SASA calculations
 - [x] Groupings to avoid internal contacts
 - [x] Parallel processing using Rayon - see benchmarks below
 - [x] Unit-tests and benchmarks carried over from the C++ side
-- [x] Pure, safe Rust
 - Based on Voronota-LT v1.1.479 (`f5ad92de4e9723ab767db3e5035c0e7532f31595`)
 
 ## Installation
@@ -122,6 +125,5 @@ Performance on Apple M4 processor (10 cores) - the speedup is relative to single
 
 MIT License
 
-Copyright (c) 2025 Kliment Olechnovic and Mikael Lund
-
+Copyright (c) 2026 Kliment Olechnovic and Mikael Lund
 
