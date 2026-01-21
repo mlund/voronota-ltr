@@ -96,7 +96,7 @@ fn compute_standard(balls: &[Ball], probe: f64, groups: Option<&[i32]>) -> Tesse
         })
         .collect();
 
-    let cells = compute_cells(&valid_summaries, searcher.spheres(), &all_collisions);
+    let cells = compute_cells(&valid_summaries, searcher.spheres(), &all_collisions, None);
 
     TessellationResult { contacts, cells }
 }
@@ -196,13 +196,12 @@ fn compute_periodic(
         .collect();
 
     // Compute cells using ALL contacts (including boundary duplicates)
-    // Keep original IDs - the cell computation handles this by only adding
-    // to cells where the ID is canonical (< n)
-    let cells = compute_cells_periodic_with_original_ids(
+    // Pass Some(n) so only canonical IDs (< n) receive contributions
+    let cells = compute_cells(
         &all_valid_summaries,
         &input_spheres,
         &all_collisions,
-        n,
+        Some(n),
     );
 
     // Deduplicate boundary contacts for output
@@ -343,15 +342,17 @@ fn collect_periodic_collision_pairs(
     pairs
 }
 
-/// Compute cells for periodic case with original (non-canonical) IDs.
-/// Only adds to cells where the ID is canonical (< n), which naturally
-/// handles deduplication for boundary contacts.
-fn compute_cells_periodic_with_original_ids(
+/// Compute cell SAS areas and volumes from contact summaries.
+///
+/// For periodic boundaries, pass `Some(n)` where n is the number of original spheres.
+/// This ensures only canonical IDs (< n) receive contributions, avoiding double-counting.
+fn compute_cells(
     summaries: &[ContactDescriptorSummary],
     spheres: &[Sphere],
     all_collisions: &[Vec<ValuedId>],
-    n: usize,
+    periodic_n: Option<usize>,
 ) -> Vec<Cell> {
+    let n = periodic_n.unwrap_or(spheres.len());
     let mut cell_summaries: Vec<CellContactSummary> = (0..n)
         .map(|i| CellContactSummary {
             id: i,
@@ -360,13 +361,19 @@ fn compute_cells_periodic_with_original_ids(
         .collect();
 
     // Accumulate contributions from contacts
-    // Only add to cells where the ID is canonical (< n)
     for cds in summaries {
         if cds.area > 0.0 {
-            if cds.id_a < n {
+            if periodic_n.is_some() {
+                // Periodic: only add to cells where the ID is canonical (< n)
+                if cds.id_a < n {
+                    cell_summaries[cds.id_a].add(cds);
+                }
+                if cds.id_b < n && cds.id_b != cds.id_a {
+                    cell_summaries[cds.id_b].add(cds);
+                }
+            } else {
+                // Non-periodic: add to both
                 cell_summaries[cds.id_a].add(cds);
-            }
-            if cds.id_b < n && cds.id_b != cds.id_a {
                 cell_summaries[cds.id_b].add(cds);
             }
         }
@@ -381,50 +388,6 @@ fn compute_cells_periodic_with_original_ids(
         }
     }
 
-    cell_summaries
-        .into_iter()
-        .filter(|cs| cs.stage == 2)
-        .map(|cs| Cell {
-            index: cs.id,
-            sas_area: cs.sas_area,
-            volume: cs.sas_inside_volume,
-        })
-        .collect()
-}
-
-/// Compute cell SAS areas and volumes from contact summaries
-fn compute_cells(
-    summaries: &[ContactDescriptorSummary],
-    spheres: &[Sphere],
-    all_collisions: &[Vec<ValuedId>],
-) -> Vec<Cell> {
-    let n = spheres.len();
-    let mut cell_summaries: Vec<CellContactSummary> = (0..n)
-        .map(|i| CellContactSummary {
-            id: i,
-            ..Default::default()
-        })
-        .collect();
-
-    // Accumulate contributions from contacts
-    for cds in summaries {
-        if cds.area > 0.0 {
-            cell_summaries[cds.id_a].add(cds);
-            cell_summaries[cds.id_b].add(cds);
-        }
-    }
-
-    // Compute SAS for each cell
-    for (i, cs) in cell_summaries.iter_mut().enumerate() {
-        if cs.stage == 1 {
-            cs.compute_sas(spheres[i].r);
-        } else if cs.stage == 0 && all_collisions[i].is_empty() {
-            // Detached sphere (no contacts)
-            cs.compute_sas_detached(i, spheres[i].r);
-        }
-    }
-
-    // Build output cells
     cell_summaries
         .into_iter()
         .filter(|cs| cs.stage == 2)
