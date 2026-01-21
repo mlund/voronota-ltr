@@ -40,25 +40,53 @@ struct Cli {
     quiet: bool,
 }
 
+fn parse_last_four_columns(line: &str) -> Option<Ball> {
+    let mut parts = line.split_whitespace().rev();
+    let r: f64 = parts.next()?.parse().ok()?;
+    let z: f64 = parts.next()?.parse().ok()?;
+    let y: f64 = parts.next()?.parse().ok()?;
+    let x: f64 = parts.next()?.parse().ok()?;
+    Some(Ball::new(x, y, z, r))
+}
+
 #[allow(clippy::many_single_char_names)]
 fn parse_balls(reader: impl BufRead) -> Vec<Ball> {
     reader
         .lines()
-        .filter_map(|line| {
-            let line = line.ok()?;
-            let parts: Vec<&str> = line.split_whitespace().collect();
-            if parts.len() < 4 {
-                return None;
-            }
-            // Take last 4 columns as x y z r
-            let n = parts.len();
-            let x: f64 = parts[n - 4].parse().ok()?;
-            let y: f64 = parts[n - 3].parse().ok()?;
-            let z: f64 = parts[n - 2].parse().ok()?;
-            let r: f64 = parts[n - 1].parse().ok()?;
-            Some(Ball::new(x, y, z, r))
-        })
+        .map_while(Result::ok)
+        .filter_map(|line| parse_last_four_columns(&line))
         .collect()
+}
+
+fn write_contacts(out: &mut impl Write, contacts: &[voronotalt::Contact]) -> io::Result<()> {
+    for c in contacts {
+        writeln!(
+            out,
+            "{} {} {:.6} {:.6}",
+            c.id_a, c.id_b, c.area, c.arc_length
+        )?;
+    }
+    Ok(())
+}
+
+fn write_cells(out: &mut impl Write, cells: &[voronotalt::Cell]) -> io::Result<()> {
+    for c in cells {
+        writeln!(out, "{} {:.6} {:.6}", c.index, c.sas_area, c.volume)?;
+    }
+    Ok(())
+}
+
+fn write_summary(out: &mut impl Write, result: &voronotalt::TessellationResult) -> io::Result<()> {
+    let total_contact_area: f64 = result.contacts.iter().map(|c| c.area).sum();
+    let total_sas_area: f64 = result.cells.iter().map(|c| c.sas_area).sum();
+    let total_volume: f64 = result.cells.iter().map(|c| c.volume).sum();
+
+    writeln!(out, "contacts: {}", result.contacts.len())?;
+    writeln!(out, "cells: {}", result.cells.len())?;
+    writeln!(out, "total_contact_area: {total_contact_area:.4}")?;
+    writeln!(out, "total_sas_area: {total_sas_area:.4}")?;
+    writeln!(out, "total_volume: {total_volume:.4}")?;
+    Ok(())
 }
 
 fn main() -> io::Result<()> {
@@ -99,33 +127,37 @@ fn main() -> io::Result<()> {
     let mut stdout = io::stdout().lock();
 
     if cli.print_contacts {
-        for c in &result.contacts {
-            writeln!(
-                stdout,
-                "{} {} {:.6} {:.6}",
-                c.id_a, c.id_b, c.area, c.arc_length
-            )?;
-        }
+        write_contacts(&mut stdout, &result.contacts)?;
     }
 
     if cli.print_cells {
-        for c in &result.cells {
-            writeln!(stdout, "{} {:.6} {:.6}", c.index, c.sas_area, c.volume)?;
-        }
+        write_cells(&mut stdout, &result.cells)?;
     }
 
-    // Default: print summary if nothing else requested
-    if !cli.print_contacts && !cli.print_cells {
-        let total_contact_area: f64 = result.contacts.iter().map(|c| c.area).sum();
-        let total_sas_area: f64 = result.cells.iter().map(|c| c.sas_area).sum();
-        let total_volume: f64 = result.cells.iter().map(|c| c.volume).sum();
-
-        println!("contacts: {}", result.contacts.len());
-        println!("cells: {}", result.cells.len());
-        println!("total_contact_area: {total_contact_area:.4}");
-        println!("total_sas_area: {total_sas_area:.4}");
-        println!("total_volume: {total_volume:.4}");
+    if !(cli.print_contacts || cli.print_cells) {
+        write_summary(&mut stdout, &result)?;
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_balls_reads_last_four_columns() {
+        let input = "a b c 1.0 2.0 3.0 4.0\n0 0 0 1\n";
+        let balls = parse_balls(input.as_bytes());
+        assert_eq!(balls.len(), 2);
+        assert_eq!(balls[0], Ball::new(1.0, 2.0, 3.0, 4.0));
+        assert_eq!(balls[1], Ball::new(0.0, 0.0, 0.0, 1.0));
+    }
+
+    #[test]
+    fn parse_balls_skips_short_lines() {
+        let input = "1 2 3\n1 2 3 4\n";
+        let balls = parse_balls(input.as_bytes());
+        assert_eq!(balls, vec![Ball::new(1.0, 2.0, 3.0, 4.0)]);
+    }
 }

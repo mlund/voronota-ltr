@@ -1,7 +1,7 @@
 use nalgebra::{Point3, Vector3};
 
 /// Input ball (center + radius), user-facing type
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Ball {
     pub x: f64,
     pub y: f64,
@@ -36,6 +36,7 @@ impl Sphere {
     }
 
     /// Convert Ball to Sphere with optional probe radius added
+    #[must_use]
     pub fn from_ball(ball: &Ball, probe: f64) -> Self {
         Self {
             center: Point3::new(ball.x, ball.y, ball.z),
@@ -90,10 +91,8 @@ impl PartialOrd for ValuedId {
 
 impl Ord for ValuedId {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        match self.value.partial_cmp(&other.value) {
-            Some(std::cmp::Ordering::Equal) | None => self.index.cmp(&other.index),
-            Some(ord) => ord,
-        }
+        self.partial_cmp(other)
+            .unwrap_or_else(|| self.index.cmp(&other.index))
     }
 }
 
