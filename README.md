@@ -1,4 +1,4 @@
-# Rust Port of Voronota-LT
+# Voronota-LT in Rust
 
 Unofficial Rust port of [voronota-lt](https://github.com/kliment-olechnovic/voronota/tree/master/expansion_lt)
 originally written in C++.
@@ -119,5 +119,8 @@ Performance on Apple M4 processor (10 cores) - the speedup is relative to single
 
 ## License
 
-MIT
+MIT License
+
+Copyright (c) 2025 Kliment Olechnovic and Mikael Lund
+
 

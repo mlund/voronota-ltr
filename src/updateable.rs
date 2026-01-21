@@ -18,9 +18,9 @@ use crate::types::{
 #[derive(Debug, Clone, Default)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct UpdateableResult {
-    /// Cell summaries for each sphere
+    /// Voronoi cell properties for each sphere.
     pub cells: Vec<Cell>,
-    /// Contacts organized by sphere ID (internal representation)
+    /// Contacts organized by sphere ID (internal representation).
     #[cfg_attr(feature = "serde", serde(skip))]
     pub(crate) contacts_by_sphere: Vec<Vec<ContactDescriptorSummary>>,
 }

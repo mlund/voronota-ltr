@@ -2,17 +2,22 @@ use nalgebra::{Point3, Vector3};
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-/// Input ball (center + radius), user-facing type
+/// Input sphere defined by center coordinates and radius.
 #[derive(Debug, Clone, Copy, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Ball {
+    /// X coordinate of center.
     pub x: f64,
+    /// Y coordinate of center.
     pub y: f64,
+    /// Z coordinate of center.
     pub z: f64,
+    /// Radius.
     pub r: f64,
 }
 
 impl Ball {
+    /// Create a new ball with center (x, y, z) and radius r.
     #[must_use]
     pub const fn new(x: f64, y: f64, z: f64, r: f64) -> Self {
         Self { x, y, z, r }
@@ -48,22 +53,29 @@ impl Sphere {
     }
 }
 
-/// Contact between two spheres
+/// Contact area between two neighboring spheres.
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Contact {
+    /// Index of first sphere (always less than `id_b`).
     pub id_a: usize,
+    /// Index of second sphere.
     pub id_b: usize,
+    /// Contact area between the two spheres.
     pub area: f64,
+    /// Arc length of the contact boundary.
     pub arc_length: f64,
 }
 
-/// Cell (Voronoi cell) around a sphere
+/// Voronoi cell properties for a sphere.
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Cell {
+    /// Index of the sphere this cell belongs to.
     pub index: usize,
+    /// Solvent-accessible surface area.
     pub sas_area: f64,
+    /// Volume of the Voronoi cell.
     pub volume: f64,
 }
 
@@ -101,20 +113,25 @@ impl Ord for ValuedId {
     }
 }
 
-/// Tessellation result containing contacts and cells
+/// Result of a tessellation computation.
 #[derive(Debug, Clone, Default)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct TessellationResult {
+    /// Contact areas between neighboring spheres.
     pub contacts: Vec<Contact>,
+    /// Voronoi cell properties for each sphere.
     pub cells: Vec<Cell>,
 }
 
-/// Periodic boundary box defined by three shift vectors
+/// Periodic boundary conditions defined by three lattice vectors.
 #[derive(Debug, Clone, Copy, Default)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct PeriodicBox {
+    /// First lattice vector.
     pub shift_a: Vector3<f64>,
+    /// Second lattice vector.
     pub shift_b: Vector3<f64>,
+    /// Third lattice vector.
     pub shift_c: Vector3<f64>,
 }
 
