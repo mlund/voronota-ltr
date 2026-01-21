@@ -160,30 +160,9 @@ impl SpheresContainer {
         if !more_affected.is_empty() {
             self.update_collisions_for_spheres(&more_affected);
 
-            // Merge more_affected into affected
-            let mut merged = Vec::with_capacity(affected.len() + more_affected.len());
-            let mut i = 0;
-            let mut j = 0;
-            while i < affected.len() && j < more_affected.len() {
-                match affected[i].cmp(&more_affected[j]) {
-                    std::cmp::Ordering::Less => {
-                        merged.push(affected[i]);
-                        i += 1;
-                    }
-                    std::cmp::Ordering::Greater => {
-                        merged.push(more_affected[j]);
-                        j += 1;
-                    }
-                    std::cmp::Ordering::Equal => {
-                        merged.push(affected[i]);
-                        i += 1;
-                        j += 1;
-                    }
-                }
-            }
-            merged.extend_from_slice(&affected[i..]);
-            merged.extend_from_slice(&more_affected[j..]);
-            affected = merged;
+            affected.extend(more_affected);
+            affected.sort_unstable();
+            affected.dedup();
         }
 
         self.recount_collisions();
