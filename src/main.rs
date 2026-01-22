@@ -3,6 +3,7 @@
 use std::fs::File;
 use std::io::{self, BufRead};
 use std::path::PathBuf;
+use std::time::Instant;
 
 use clap::{ArgAction, Parser};
 use log::{debug, info};
@@ -79,6 +80,14 @@ struct Cli {
     /// Reduce verbosity to warnings only
     #[arg(short, long)]
     quiet: bool,
+
+    /// Maximum number of threads to use (default: all available)
+    #[arg(long)]
+    processors: Option<usize>,
+
+    /// Measure and output running time to stderr
+    #[arg(long)]
+    measure_running_time: bool,
 }
 
 #[allow(clippy::too_many_lines)]
@@ -96,6 +105,15 @@ fn main() -> io::Result<()> {
         }
     };
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or(log_level)).init();
+
+    // Configure thread pool if --processors specified
+    if let Some(num_threads) = cli.processors {
+        rayon::ThreadPoolBuilder::new()
+            .num_threads(num_threads)
+            .build_global()
+            .map_err(io::Error::other)?;
+        info!("Using {num_threads} threads");
+    }
 
     // Setup radii lookup
     let mut radii = RadiiLookup::new();
@@ -191,18 +209,24 @@ fn main() -> io::Result<()> {
     });
 
     // Compute tessellation
+    let start = Instant::now();
     let result = compute_tessellation(
         &balls,
         cli.probe,
         periodic_box.as_ref(),
         grouping.as_deref(),
     );
+    let elapsed = start.elapsed();
 
     info!(
         "Computed {} contacts, {} cells",
         result.contacts.len(),
         result.cells.len()
     );
+
+    if cli.measure_running_time {
+        info!("Tessellation time: {} ms", elapsed.as_millis());
+    }
 
     // Build extended JSON output with per-ball SASA/volumes and totals
     let output = JsonOutput {
