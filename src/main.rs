@@ -4,7 +4,7 @@ use std::fs::File;
 use std::io::{self, BufRead};
 use std::path::PathBuf;
 
-use clap::Parser;
+use clap::{ArgAction, Parser};
 use log::{debug, info};
 use serde::Serialize;
 use voronota_ltr::input::{InputFormat, ParseOptions, RadiiLookup, parse_file, parse_reader};
@@ -60,7 +60,11 @@ struct Cli {
     #[arg(long, num_args = 6, value_names = ["X1", "Y1", "Z1", "X2", "Y2", "Z2"])]
     periodic_box_corners: Option<Vec<f64>>,
 
-    /// Suppress log messages
+    /// Increase verbosity (-v: debug, -vv: trace)
+    #[arg(short, long, action = ArgAction::Count)]
+    verbose: u8,
+
+    /// Reduce verbosity to warnings only
     #[arg(short, long)]
     quiet: bool,
 }
@@ -68,10 +72,17 @@ struct Cli {
 fn main() -> io::Result<()> {
     let cli = Cli::parse();
 
-    // Initialize logging
-    if !cli.quiet {
-        env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
-    }
+    // Initialize logging based on verbosity
+    let log_level = if cli.quiet {
+        "warn"
+    } else {
+        match cli.verbose {
+            0 => "info",
+            1 => "debug",
+            _ => "trace",
+        }
+    };
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or(log_level)).init();
 
     // Setup radii lookup
     let mut radii = RadiiLookup::new();

@@ -100,20 +100,11 @@ tess.restore();
 Supports PDB, mmCIF, and XYZR input formats (auto-detected from extension or content):
 
 ```sh
-# PDB input
+# PDB / mmCIF / XYZR input
 voronota-ltr -i structure.pdb --probe 1.4
 
-# mmCIF input
-voronota-ltr -i structure.cif --probe 1.4
-
-# XYZR input (last 4 columns: x y z radius)
-voronota-ltr -i atoms.xyzr --probe 1.4
-
-# Save JSON output to file
+# Save JSON output to file instead of stdout
 voronota-ltr -i structure.pdb -o results.json
-
-# Quiet mode (suppress log messages)
-voronota-ltr -i structure.pdb -q -o results.json
 
 # Exclude heteroatoms (HETATM records)
 voronota-ltr -i structure.pdb --exclude-heteroatoms
@@ -125,7 +116,7 @@ voronota-ltr -i structure.pdb --include-hydrogens
 voronota-ltr -i structure.pdb --radii-file custom_radii.txt
 
 # With periodic boundary conditions
-voronota-ltr -i atoms.xyzr --periodic-box-corners 0 0 0 100 100 100
+voronota-ltr -i structure.xyzr --periodic-box-corners 0 0 0 100 100 100
 ```
 
 #### Loading JSON output in Python
