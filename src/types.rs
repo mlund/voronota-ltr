@@ -120,13 +120,19 @@ impl Ord for ValuedId {
     }
 }
 
-/// Trait for tessellation results that contain cell data.
-pub trait CellResults {
+/// Trait for accessing tessellation results (contacts and cells).
+pub trait TessellationResults {
     /// Number of balls in the tessellation.
     fn num_balls(&self) -> usize;
 
     /// Access to computed cells.
     fn cells(&self) -> &[Cell];
+
+    /// Number of contacts.
+    fn num_contacts(&self) -> usize;
+
+    /// Get all contacts.
+    fn contacts(&self) -> Vec<Contact>;
 
     /// Get solvent-accessible surface area for each ball as a Vec.
     ///
@@ -165,6 +171,12 @@ pub trait CellResults {
     fn total_volume(&self) -> f64 {
         self.cells().iter().map(|c| c.volume).sum()
     }
+
+    /// Get total contact area.
+    #[must_use]
+    fn total_contact_area(&self) -> f64 {
+        self.contacts().iter().map(|c| c.area).sum()
+    }
 }
 
 /// Result of a tessellation computation.
@@ -179,13 +191,21 @@ pub struct TessellationResult {
     pub cells: Vec<Cell>,
 }
 
-impl CellResults for TessellationResult {
+impl TessellationResults for TessellationResult {
     fn num_balls(&self) -> usize {
         self.num_balls
     }
 
     fn cells(&self) -> &[Cell] {
         &self.cells
+    }
+
+    fn num_contacts(&self) -> usize {
+        self.contacts.len()
+    }
+
+    fn contacts(&self) -> Vec<Contact> {
+        self.contacts.clone()
     }
 }
 

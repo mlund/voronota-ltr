@@ -30,7 +30,7 @@ cargo install voronota-ltr
 ## Examples
 
 ```rust
-use voronota_ltr::{Ball, CellResults, compute_tessellation};
+use voronota_ltr::{Ball, TessellationResults, compute_tessellation};
 
 let balls = vec![
     Ball::new(0.0, 0.0, 0.0, 1.5),

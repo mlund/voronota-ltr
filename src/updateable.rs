@@ -55,13 +55,41 @@ impl UpdateableResult {
     }
 }
 
-impl crate::types::CellResults for UpdateableResult {
+impl crate::types::TessellationResults for UpdateableResult {
     fn num_balls(&self) -> usize {
         self.num_balls
     }
 
     fn cells(&self) -> &[Cell] {
         &self.cells
+    }
+
+    fn num_contacts(&self) -> usize {
+        // Count contacts where id_a == sphere index to avoid double counting
+        self.contacts_by_sphere
+            .iter()
+            .enumerate()
+            .map(|(i, contacts)| contacts.iter().filter(|c| c.id_a == i).count())
+            .sum()
+    }
+
+    fn contacts(&self) -> Vec<Contact> {
+        // Collect unique contacts (only where id_a == sphere index)
+        self.contacts_by_sphere
+            .iter()
+            .enumerate()
+            .flat_map(|(i, contacts)| {
+                contacts
+                    .iter()
+                    .filter(move |c| c.id_a == i)
+                    .map(|cds| Contact {
+                        id_a: cds.id_a,
+                        id_b: cds.id_b,
+                        area: cds.area,
+                        arc_length: cds.arc_length,
+                    })
+            })
+            .collect()
     }
 }
 
