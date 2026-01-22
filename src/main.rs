@@ -62,8 +62,12 @@ struct Cli {
     radii_file: Option<PathBuf>,
 
     /// Periodic box corners: x1 y1 z1 x2 y2 z2
-    #[arg(long, num_args = 6, value_names = ["X1", "Y1", "Z1", "X2", "Y2", "Z2"])]
+    #[arg(long, num_args = 6, value_names = ["X1", "Y1", "Z1", "X2", "Y2", "Z2"], conflicts_with = "periodic_box_directions")]
     periodic_box_corners: Option<Vec<f64>>,
+
+    /// Periodic box as three direction vectors: x1 y1 z1 x2 y2 z2 x3 y3 z3
+    #[arg(long, num_args = 9, value_names = ["X1", "Y1", "Z1", "X2", "Y2", "Z2", "X3", "Y3", "Z3"], conflicts_with = "periodic_box_corners")]
+    periodic_box_directions: Option<Vec<f64>>,
 
     /// Only compute inter-chain contacts (exclude intra-chain)
     #[arg(long)]
@@ -200,13 +204,18 @@ fn main() -> io::Result<()> {
 
     info!("Read {} balls", balls.len());
 
-    // Parse periodic box if specified
-    let periodic_box = cli.periodic_box_corners.as_ref().map(|coords| {
-        PeriodicBox::from_corners(
-            (coords[0], coords[1], coords[2]),
-            (coords[3], coords[4], coords[5]),
-        )
-    });
+    // Parse periodic box if specified (clap ensures only one can be used)
+    let periodic_box = if let Some(v) = &cli.periodic_box_directions {
+        Some(PeriodicBox::from_vectors(
+            (v[0], v[1], v[2]),
+            (v[3], v[4], v[5]),
+            (v[6], v[7], v[8]),
+        ))
+    } else {
+        cli.periodic_box_corners
+            .as_ref()
+            .map(|c| PeriodicBox::from_corners((c[0], c[1], c[2]), (c[3], c[4], c[5])))
+    };
 
     // Compute tessellation
     let start = Instant::now();

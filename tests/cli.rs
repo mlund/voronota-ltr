@@ -96,9 +96,49 @@ fn test_balls_cs_1x1_periodic() {
     let total_sas_area: f64 = result.cells.iter().map(|c| c.sas_area).sum();
     let total_volume: f64 = result.cells.iter().map(|c| c.volume).sum();
 
-    assert_approx("total_contact_area", total_contact_area, 4812.14, 50.0);
-    assert_approx("total_sas_area", total_sas_area, 20023.1, 100.0);
-    assert_approx("total_volume", total_volume, 45173.2, 100.0);
+    assert_approx("total_contact_area", total_contact_area, 4812.14, 0.01);
+    assert_approx("total_sas_area", total_sas_area, 20023.06, 0.01);
+    assert_approx("total_volume", total_volume, 45173.20, 0.01);
+}
+
+#[test]
+fn test_balls_cs_1x1_periodic_directions() {
+    // Same box as test_balls_cs_1x1_periodic but using direction vectors
+    let output = binary()
+        .args([
+            "-i",
+            "benches/data/balls_cs_1x1.xyzr",
+            "--probe",
+            "2.0",
+            "--periodic-box-directions",
+            "200",
+            "0",
+            "0", // vector a
+            "0",
+            "250",
+            "0", // vector b
+            "0",
+            "0",
+            "300", // vector c
+            "-q",
+        ])
+        .output()
+        .expect("failed to run binary");
+
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let result = parse_json(&stdout);
+
+    assert_eq!(result.contacts.len(), 189);
+    assert_eq!(result.cells.len(), 100);
+
+    let total_contact_area: f64 = result.contacts.iter().map(|c| c.area).sum();
+    let total_sas_area: f64 = result.cells.iter().map(|c| c.sas_area).sum();
+    let total_volume: f64 = result.cells.iter().map(|c| c.volume).sum();
+
+    assert_approx("total_contact_area", total_contact_area, 4812.14, 0.01);
+    assert_approx("total_sas_area", total_sas_area, 20023.06, 0.01);
+    assert_approx("total_volume", total_volume, 45173.20, 0.01);
 }
 
 #[test]
