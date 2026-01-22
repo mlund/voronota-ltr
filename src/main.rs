@@ -7,7 +7,10 @@ use std::path::PathBuf;
 use clap::{ArgAction, Parser};
 use log::{debug, info};
 use serde::Serialize;
-use voronota_ltr::input::{InputFormat, ParseOptions, RadiiLookup, parse_file, parse_reader};
+use voronota_ltr::input::{
+    InputFormat, ParseOptions, RadiiLookup, build_chain_grouping, build_residue_grouping,
+    parse_file_with_records, parse_reader,
+};
 use voronota_ltr::{Ball, PeriodicBox, Results, TessellationResult, compute_tessellation};
 
 /// Extended JSON output including per-ball SASA/volumes and totals
@@ -31,6 +34,7 @@ struct JsonOutput {
     Computes inter-atom contact areas, solvent accessible surface areas, and volumes.\n\n\
     Supports PDB, mmCIF, and XYZR input formats (auto-detected from extension or content)."
 )]
+#[allow(clippy::struct_excessive_bools)]
 struct Cli {
     /// Rolling probe radius
     #[arg(long, default_value_t = 1.4)]
@@ -60,6 +64,14 @@ struct Cli {
     #[arg(long, num_args = 6, value_names = ["X1", "Y1", "Z1", "X2", "Y2", "Z2"])]
     periodic_box_corners: Option<Vec<f64>>,
 
+    /// Only compute inter-chain contacts (exclude intra-chain)
+    #[arg(long)]
+    inter_chain_only: bool,
+
+    /// Only compute inter-residue contacts (exclude intra-residue)
+    #[arg(long)]
+    inter_residue_only: bool,
+
     /// Increase verbosity (-v: debug, -vv: trace)
     #[arg(short, long, action = ArgAction::Count)]
     verbose: u8,
@@ -69,6 +81,7 @@ struct Cli {
     quiet: bool,
 }
 
+#[allow(clippy::too_many_lines)]
 fn main() -> io::Result<()> {
     let cli = Cli::parse();
 
@@ -100,9 +113,32 @@ fn main() -> io::Result<()> {
         as_assembly: false,
     };
 
-    // Read input balls
-    let balls: Vec<Ball> = if let Some(path) = &cli.input {
-        parse_file(path, &options, &radii)?
+    // Read input balls and records
+    let (balls, grouping): (Vec<Ball>, Option<Vec<i32>>) = if let Some(path) = &cli.input {
+        let parsed = parse_file_with_records(path, &options, &radii)?;
+
+        // Build grouping if inter-chain or inter-residue filtering requested
+        let grouping = if cli.inter_chain_only {
+            if parsed.records.is_empty() {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    "--inter-chain-only requires PDB or mmCIF input (not XYZR)",
+                ));
+            }
+            Some(build_chain_grouping(&parsed.records))
+        } else if cli.inter_residue_only {
+            if parsed.records.is_empty() {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    "--inter-residue-only requires PDB or mmCIF input (not XYZR)",
+                ));
+            }
+            Some(build_residue_grouping(&parsed.records))
+        } else {
+            None
+        };
+
+        (parsed.balls, grouping)
     } else {
         // For stdin, try to detect format
         let stdin = io::stdin();
@@ -129,7 +165,19 @@ fn main() -> io::Result<()> {
         };
 
         debug!("Detected stdin format: {format:?}");
-        parse_reader(reader, format, Some(&first_line), &options, &radii)?
+
+        // Note: stdin doesn't support grouping yet (would need parse_reader_with_records)
+        if cli.inter_chain_only || cli.inter_residue_only {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "--inter-chain-only and --inter-residue-only require file input (-i)",
+            ));
+        }
+
+        (
+            parse_reader(reader, format, Some(&first_line), &options, &radii)?,
+            None,
+        )
     };
 
     info!("Read {} balls", balls.len());
@@ -143,7 +191,12 @@ fn main() -> io::Result<()> {
     });
 
     // Compute tessellation
-    let result = compute_tessellation(&balls, cli.probe, periodic_box.as_ref(), None);
+    let result = compute_tessellation(
+        &balls,
+        cli.probe,
+        periodic_box.as_ref(),
+        grouping.as_deref(),
+    );
 
     info!(
         "Computed {} contacts, {} cells",

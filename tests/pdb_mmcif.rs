@@ -315,3 +315,66 @@ fn custom_radii_file() {
     assert_approx_eq!(result.total_sas_area(), 7094.42, 1.0);
     assert_approx_eq!(result.total_contact_area(), 21423.5, 5.0);
 }
+
+#[test]
+fn inter_chain_contacts_only() {
+    use voronota_ltr::input::{build_chain_grouping, parse_file_with_records};
+
+    let cif_path = test_file("assembly_1ctf.cif");
+    if !cif_path.exists() {
+        eprintln!("Skipping test: {cif_path:?} not found");
+        return;
+    }
+
+    let radii = RadiiLookup::new();
+    let options = ParseOptions {
+        exclude_heteroatoms: true,
+        ..Default::default()
+    };
+
+    let parsed =
+        parse_file_with_records(&cif_path, &options, &radii).expect("Failed to parse mmCIF file");
+
+    let grouping = build_chain_grouping(&parsed.records);
+    let result = compute_tessellation(&parsed.balls, 1.4, None, Some(&grouping));
+
+    // C++ reference: contacts_1ctf_mmcif_assembly_inter_chain_mesh_summary.txt
+    // 974 balls, 218 inter-chain contacts, 513.032 contact area
+    assert_eq!(parsed.balls.len(), 974, "Expected 974 balls");
+    assert_eq!(
+        result.contacts.len(),
+        218,
+        "Expected 218 inter-chain contacts"
+    );
+    assert_approx_eq!(result.total_contact_area(), 513.032, 0.001);
+}
+
+#[test]
+fn inter_residue_contacts_only() {
+    use voronota_ltr::input::{build_residue_grouping, parse_file_with_records};
+
+    let pdb_path = test_file("assembly_1ctf.pdb1");
+    if !pdb_path.exists() {
+        eprintln!("Skipping test: {pdb_path:?} not found");
+        return;
+    }
+
+    let radii = RadiiLookup::new();
+    let options = ParseOptions::default();
+
+    let parsed =
+        parse_file_with_records(&pdb_path, &options, &radii).expect("Failed to parse PDB file");
+
+    let grouping = build_residue_grouping(&parsed.records);
+    let result = compute_tessellation(&parsed.balls, 1.4, None, Some(&grouping));
+
+    // C++ reference: voronota-lt -i assembly_1ctf.pdb1 --compute-only-inter-residue-contacts
+    // 492 balls, 2013 inter-residue contacts, 4486.49 contact area
+    assert_eq!(parsed.balls.len(), 492, "Expected 492 balls");
+    assert_eq!(
+        result.contacts.len(),
+        2013,
+        "Expected 2013 inter-residue contacts"
+    );
+    assert_approx_eq!(result.total_contact_area(), 4486.49, 0.01);
+}

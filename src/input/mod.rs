@@ -276,6 +276,139 @@ impl<I: Iterator<Item = io::Result<String>>> Read for CombinedReader<I> {
     }
 }
 
+/// Result of parsing a molecular file with atom records preserved.
+pub struct ParsedStructure {
+    /// Atomic balls with coordinates and radii.
+    pub balls: Vec<Ball>,
+    /// Original atom records with metadata (empty for XYZR format).
+    pub records: Vec<AtomRecord>,
+}
+
+/// Parse input file and return both balls and atom records.
+///
+/// For XYZR format, records will be empty since there's no atom metadata.
+///
+/// # Errors
+/// Returns error if file cannot be opened or format cannot be detected.
+pub fn parse_file_with_records(
+    path: &Path,
+    options: &ParseOptions,
+    radii: &RadiiLookup,
+) -> io::Result<ParsedStructure> {
+    let file = File::open(path)?;
+    let mut reader = BufReader::new(file);
+
+    let format = detect_format_from_extension(path);
+
+    if let Some(fmt) = format {
+        info!("Detected format from extension: {fmt:?}");
+        Ok(parse_reader_with_records(
+            &mut reader,
+            fmt,
+            None,
+            options,
+            radii,
+        ))
+    } else {
+        let (fmt, first_line) = detect_format_from_content(&mut reader).ok_or_else(|| {
+            io::Error::new(io::ErrorKind::InvalidData, "Unable to detect input format")
+        })?;
+        info!("Detected format from content: {fmt:?}");
+        Ok(parse_reader_with_records(
+            &mut reader,
+            fmt,
+            Some(&first_line),
+            options,
+            radii,
+        ))
+    }
+}
+
+/// Parse from reader and return both balls and atom records.
+fn parse_reader_with_records<R: BufRead>(
+    reader: R,
+    format: InputFormat,
+    first_line: Option<&str>,
+    options: &ParseOptions,
+    radii: &RadiiLookup,
+) -> ParsedStructure {
+    match format {
+        InputFormat::Xyzr => ParsedStructure {
+            balls: parse_xyzr(reader, first_line),
+            records: Vec::new(),
+        },
+        InputFormat::Pdb => {
+            let records = if let Some(line) = first_line {
+                let combined = std::iter::once(Ok(line.to_string())).chain(reader.lines());
+                pdb::parse_pdb(CombinedReader::new(combined), options)
+            } else {
+                pdb::parse_pdb(reader, options)
+            };
+            debug!("Parsed {} atom records", records.len());
+            let balls = records_to_balls(&records, radii);
+            ParsedStructure { balls, records }
+        }
+        InputFormat::Mmcif => {
+            let records = if let Some(line) = first_line {
+                let combined = std::iter::once(Ok(line.to_string())).chain(reader.lines());
+                mmcif::parse_mmcif(CombinedReader::new(combined), options)
+            } else {
+                mmcif::parse_mmcif(reader, options)
+            };
+            debug!("Parsed {} atom records", records.len());
+            let balls = records_to_balls(&records, radii);
+            ParsedStructure { balls, records }
+        }
+    }
+}
+
+/// Build chain-based grouping from atom records.
+///
+/// Returns a vector where each element is the group ID for the corresponding atom.
+/// Atoms in the same chain get the same group ID.
+#[must_use]
+pub fn build_chain_grouping(records: &[AtomRecord]) -> Vec<i32> {
+    use std::collections::HashMap;
+
+    let mut chain_to_group: HashMap<&str, i32> = HashMap::new();
+    let mut next_group = 0;
+
+    records
+        .iter()
+        .map(|r| {
+            *chain_to_group.entry(&r.chain_id).or_insert_with(|| {
+                let g = next_group;
+                next_group += 1;
+                g
+            })
+        })
+        .collect()
+}
+
+/// Build residue-based grouping from atom records.
+///
+/// Returns a vector where each element is the group ID for the corresponding atom.
+/// Atoms in the same residue (same chain + residue number + insertion code) get the same group ID.
+#[must_use]
+pub fn build_residue_grouping(records: &[AtomRecord]) -> Vec<i32> {
+    use std::collections::HashMap;
+
+    let mut residue_to_group: HashMap<(&str, i32, &str), i32> = HashMap::new();
+    let mut next_group = 0;
+
+    records
+        .iter()
+        .map(|r| {
+            let key = (r.chain_id.as_str(), r.res_seq, r.i_code.as_str());
+            *residue_to_group.entry(key).or_insert_with(|| {
+                let g = next_group;
+                next_group += 1;
+                g
+            })
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -323,5 +456,48 @@ mod tests {
         assert_eq!(balls.len(), 2);
         assert_eq!(balls[0], Ball::new(1.0, 2.0, 3.0, 4.0));
         assert_eq!(balls[1], Ball::new(5.0, 6.0, 7.0, 8.0));
+    }
+
+    fn make_record(chain: &str, res_seq: i32, i_code: &str) -> AtomRecord {
+        AtomRecord {
+            record_name: "ATOM".to_string(),
+            serial: 1,
+            name: "CA".to_string(),
+            alt_loc: String::new(),
+            res_name: "ALA".to_string(),
+            chain_id: chain.to_string(),
+            res_seq,
+            i_code: i_code.to_string(),
+            x: 0.0,
+            y: 0.0,
+            z: 0.0,
+            element: "C".to_string(),
+        }
+    }
+
+    #[test]
+    fn chain_grouping() {
+        let records = vec![
+            make_record("A", 1, ""),
+            make_record("A", 2, ""),
+            make_record("B", 1, ""),
+            make_record("A", 3, ""),
+            make_record("B", 2, ""),
+        ];
+        let groups = build_chain_grouping(&records);
+        assert_eq!(groups, vec![0, 0, 1, 0, 1]);
+    }
+
+    #[test]
+    fn residue_grouping() {
+        let records = vec![
+            make_record("A", 1, ""),  // residue 0
+            make_record("A", 1, ""),  // same residue 0
+            make_record("A", 2, ""),  // residue 1
+            make_record("B", 1, ""),  // residue 2 (different chain)
+            make_record("A", 1, "A"), // residue 3 (insertion code differs)
+        ];
+        let groups = build_residue_grouping(&records);
+        assert_eq!(groups, vec![0, 0, 1, 2, 3]);
     }
 }
