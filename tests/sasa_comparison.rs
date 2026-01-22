@@ -4,7 +4,7 @@
 //! - voronota-ltr: Radical Voronoi tessellation
 //! - rust-sasa: Shrake-Rupley algorithm (numerical sphere point sampling)
 
-use rust_sasa::{calculate_sasa_internal, Atom};
+use rust_sasa::{Atom, calculate_sasa_internal};
 use voronota_ltr::{Ball, Results, compute_tessellation};
 
 /// Standard atomic radii (Bondi radii, commonly used for SASA)
@@ -70,7 +70,8 @@ fn test_sasa_comparison_with_rust_sasa() {
     let mut total_rust: f64 = 0.0;
     let mut total_voronota: f64 = 0.0;
 
-    for (i, (rust_val, voronota_val)) in rust_sasa_result.iter().zip(voronota_sas.iter()).enumerate()
+    for (i, (rust_val, voronota_val)) in
+        rust_sasa_result.iter().zip(voronota_sas.iter()).enumerate()
     {
         let rust_f64 = f64::from(*rust_val);
         total_rust += rust_f64;

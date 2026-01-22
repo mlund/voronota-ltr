@@ -33,3 +33,7 @@ serde_json = "1"
 [[bench]]
 name = "tessellation"
 harness = false
+
+[[bench]]
+name = "sasa_comparison"
+harness = false
