@@ -99,17 +99,17 @@ tess.restore();
 Input is a `.xyzr` file with whitespace-separated values (last 4 columns: x y z radius):
 
 ```sh
-# Summary output
+# Summary to stderr, JSON results to stdout
 voronota-ltr -i atoms.xyzr --probe 1.4
 
-# Print contacts table
-voronota-ltr -i atoms.xyzr --probe 1.4 --print-contacts
+# Save JSON output to file
+voronota-ltr -i atoms.xyzr --probe 1.4 -o results.json
 
-# Print cells table
-voronota-ltr -i atoms.xyzr --probe 1.4 --print-cells
+# Quiet mode (suppress summary)
+voronota-ltr -i atoms.xyzr -q -o results.json
 
 # With periodic boundary conditions
-voronota-ltr -i atoms.xyzr --probe 1.4 --periodic-box-corners 0 0 0 100 100 100
+voronota-ltr -i atoms.xyzr --periodic-box-corners 0 0 0 100 100 100
 ```
 
 ## Benchmarks
