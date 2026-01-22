@@ -13,7 +13,7 @@ Outputs inter-atom contact areas, solvent accessible surface (SAS) areas, and vo
 - [x] Basic radical tessellation (stateless)
 - [x] Updateable tessellation for incremental updates (stateful)
 - [x] Periodic boundaries
-- [x] SASA calculations
+- [x] Per atom SASA and volume
 - [x] Groupings to avoid internal contacts
 - [x] Parallel processing using Rayon - see benchmarks below
 - [x] Unit-tests and benchmarks carried over from the C++ side
@@ -30,7 +30,7 @@ cargo install voronota-ltr
 ## Examples
 
 ```rust
-use voronota_ltr::{Ball, compute_tessellation};
+use voronota_ltr::{Ball, CellResults, compute_tessellation};
 
 let balls = vec![
     Ball::new(0.0, 0.0, 0.0, 1.5),
@@ -40,12 +40,16 @@ let balls = vec![
 
 let result = compute_tessellation(&balls, 1.4, None, None);
 
+// Per-ball SAS areas and volumes (indexed by ball)
+let sas_areas: Vec<f64> = result.sas_areas();
+let volumes: Vec<f64> = result.volumes();
+
+// Total SAS area
+let total_sas: f64 = result.total_sas_area();
+
+// Detailed contact and cell data
 for contact in &result.contacts {
     println!("Contact {}-{}: area={:.2}", contact.id_a, contact.id_b, contact.area);
-}
-
-for cell in &result.cells {
-    println!("Cell {}: SAS={:.2}, vol={:.2}", cell.index, cell.sas_area, cell.volume);
 }
 ```
 

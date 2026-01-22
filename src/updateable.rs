@@ -18,6 +18,8 @@ use crate::types::{
 #[derive(Debug, Clone, Default)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct UpdateableResult {
+    /// Number of input balls.
+    pub num_balls: usize,
     /// Voronoi cell properties for each sphere.
     pub cells: Vec<Cell>,
     /// Contacts organized by sphere ID (internal representation).
@@ -28,6 +30,12 @@ pub struct UpdateableResult {
 impl UpdateableResult {
     const fn is_empty(&self) -> bool {
         self.cells.is_empty() || self.contacts_by_sphere.is_empty()
+    }
+
+    /// Get number of spheres in the result.
+    #[must_use]
+    pub const fn num_spheres(&self) -> usize {
+        self.num_balls
     }
 
     /// Get contacts involving a specific sphere.
@@ -45,11 +53,15 @@ impl UpdateableResult {
                 arc_length: cds.arc_length,
             })
     }
+}
 
-    /// Get number of spheres in the result.
-    #[must_use]
-    pub const fn num_spheres(&self) -> usize {
-        self.contacts_by_sphere.len()
+impl crate::types::CellResults for UpdateableResult {
+    fn num_balls(&self) -> usize {
+        self.num_balls
+    }
+
+    fn cells(&self) -> &[Cell] {
+        &self.cells
     }
 }
 
@@ -319,7 +331,11 @@ impl UpdateableTessellation {
             })
             .collect();
 
-        TessellationResult { contacts, cells }
+        TessellationResult {
+            num_balls: n,
+            contacts,
+            cells,
+        }
     }
 
     /// Get IDs of spheres that changed in the last update.
@@ -403,6 +419,7 @@ impl UpdateableTessellation {
             self.compute_contact_summaries_with_dedup(&collision_pairs, periodic, n);
 
         // Organize contacts by sphere (use deduped canonical IDs)
+        self.state.result.num_balls = n;
         self.state.result.contacts_by_sphere = vec![Vec::new(); n];
         for cds in &deduped_summaries {
             if cds.area > 0.0 {

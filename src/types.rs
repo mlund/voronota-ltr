@@ -120,14 +120,73 @@ impl Ord for ValuedId {
     }
 }
 
+/// Trait for tessellation results that contain cell data.
+pub trait CellResults {
+    /// Number of balls in the tessellation.
+    fn num_balls(&self) -> usize;
+
+    /// Access to computed cells.
+    fn cells(&self) -> &[Cell];
+
+    /// Get solvent-accessible surface area for each ball as a Vec.
+    ///
+    /// Returns a Vec of length `num_balls` where index `i` contains the
+    /// SAS area for ball `i`. Balls without computed cells get 0.0.
+    #[must_use]
+    fn sas_areas(&self) -> Vec<f64> {
+        let mut result = vec![0.0; self.num_balls()];
+        for cell in self.cells() {
+            result[cell.index] = cell.sas_area;
+        }
+        result
+    }
+
+    /// Get cell volumes for each ball as a Vec.
+    ///
+    /// Returns a Vec of length `num_balls` where index `i` contains the
+    /// volume for ball `i`. Balls without computed cells get 0.0.
+    #[must_use]
+    fn volumes(&self) -> Vec<f64> {
+        let mut result = vec![0.0; self.num_balls()];
+        for cell in self.cells() {
+            result[cell.index] = cell.volume;
+        }
+        result
+    }
+
+    /// Get total solvent-accessible surface area across all balls.
+    #[must_use]
+    fn total_sas_area(&self) -> f64 {
+        self.cells().iter().map(|c| c.sas_area).sum()
+    }
+
+    /// Get total volume across all balls.
+    #[must_use]
+    fn total_volume(&self) -> f64 {
+        self.cells().iter().map(|c| c.volume).sum()
+    }
+}
+
 /// Result of a tessellation computation.
 #[derive(Debug, Clone, Default)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct TessellationResult {
+    /// Number of input balls.
+    pub num_balls: usize,
     /// Contact areas between neighboring spheres.
     pub contacts: Vec<Contact>,
     /// Voronoi cell properties for each sphere.
     pub cells: Vec<Cell>,
+}
+
+impl CellResults for TessellationResult {
+    fn num_balls(&self) -> usize {
+        self.num_balls
+    }
+
+    fn cells(&self) -> &[Cell] {
+        &self.cells
+    }
 }
 
 /// Periodic boundary conditions defined by three lattice vectors.

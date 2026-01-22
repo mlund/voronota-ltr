@@ -7,7 +7,7 @@
 //! # Example
 //!
 //! ```
-//! use voronota_ltr::{Ball, compute_tessellation};
+//! use voronota_ltr::{Ball, CellResults, compute_tessellation};
 //!
 //! let balls = vec![
 //!     Ball::new(0.0, 0.0, 0.0, 1.5),
@@ -17,12 +17,15 @@
 //!
 //! let result = compute_tessellation(&balls, 1.4, None, None);
 //!
+//! // Per-ball SAS areas and volumes (indexed by ball)
+//! let sas_areas: Vec<f64> = result.sas_areas();
+//! let volumes: Vec<f64> = result.volumes();
+//!
+//! // Total SAS area
+//! let total_sas: f64 = result.total_sas_area();
+//!
 //! for contact in &result.contacts {
 //!     println!("Contact {}-{}: area={:.2}", contact.id_a, contact.id_b, contact.area);
-//! }
-//!
-//! for cell in &result.cells {
-//!     println!("Cell {}: SAS area={:.2}, volume={:.2}", cell.index, cell.sas_area, cell.volume);
 //! }
 //! ```
 
@@ -39,5 +42,5 @@ mod updateable;
 pub use solvent_spheres::{SolventSphere, SolventSpheresError, compute_solvent_spheres};
 pub use subdivided_icosahedron::SubdivisionDepth;
 pub use tessellation::compute_tessellation;
-pub use types::{Ball, Cell, Contact, PeriodicBox, TessellationResult};
+pub use types::{Ball, Cell, CellResults, Contact, PeriodicBox, TessellationResult};
 pub use updateable::{UpdateableResult, UpdateableTessellation};

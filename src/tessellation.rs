@@ -90,7 +90,11 @@ fn compute_standard(balls: &[Ball], probe: f64, groups: Option<&[i32]>) -> Tesse
 
     let cells = compute_cells(&valid_summaries, searcher.spheres(), &all_collisions, None);
 
-    TessellationResult { contacts, cells }
+    TessellationResult {
+        num_balls: balls.len(),
+        contacts,
+        cells,
+    }
 }
 
 /// Collect unique collision pairs, optionally filtering by group.
@@ -212,7 +216,11 @@ fn compute_periodic(
         })
         .collect();
 
-    TessellationResult { contacts, cells }
+    TessellationResult {
+        num_balls: n,
+        contacts,
+        cells,
+    }
 }
 
 /// Deduplicate periodic boundary contacts following C++ algorithm.
