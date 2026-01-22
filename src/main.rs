@@ -5,6 +5,7 @@ use std::io::{self, BufRead};
 use std::path::PathBuf;
 use std::time::Instant;
 
+use clap::builder::styling::{AnsiColor, Effects, Styles};
 use clap::{ArgAction, Parser};
 use log::{debug, info};
 use serde::Serialize;
@@ -26,6 +27,14 @@ struct JsonOutput {
     total_contact_area: f64,
 }
 
+fn clap_styles() -> Styles {
+    Styles::styled()
+        .header(AnsiColor::Yellow.on_default() | Effects::BOLD)
+        .usage(AnsiColor::Red.on_default() | Effects::BOLD)
+        .literal(AnsiColor::Blue.on_default() | Effects::BOLD)
+        .placeholder(AnsiColor::Green.on_default())
+}
+
 #[derive(Parser)]
 #[command(name = "voronota_ltr")]
 #[command(about = "Compute radical Voronoi tessellation of atomic balls")]
@@ -35,6 +44,8 @@ struct JsonOutput {
     Computes inter-atom contact areas, solvent accessible surface areas, and volumes.\n\n\
     Supports PDB, mmCIF, and XYZR input formats (auto-detected from extension or content)."
 )]
+#[command(color = clap::ColorChoice::Always, styles = clap_styles())]
+#[command(version)]
 #[allow(clippy::struct_excessive_bools)]
 struct Cli {
     /// Rolling probe radius
