@@ -149,7 +149,7 @@ fn test_help() {
 
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains(".xyzr"));
+    assert!(stdout.contains("XYZR"));
     assert!(stdout.contains("--probe"));
     assert!(stdout.contains("--output"));
 }

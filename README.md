@@ -16,6 +16,7 @@ Outputs inter-atom contact areas, solvent accessible surface (SAS) areas, and vo
 - [x] Per atom SASA and volume
 - [x] Groupings to avoid internal contacts
 - [x] Parallel processing using Rayon - see benchmarks below
+- [x] PDB, mmCIF, and XYZR input formats with auto-detection
 - [x] Unit-tests and benchmarks carried over from the C++ side
 - Based on Voronota-LT v1.1.479 (`f5ad92de4e9723ab767db3e5035c0e7532f31595`)
 
@@ -96,17 +97,32 @@ tess.restore();
 
 ### CLI
 
-Input is a `.xyzr` file with whitespace-separated values (last 4 columns: x y z radius):
+Supports PDB, mmCIF, and XYZR input formats (auto-detected from extension or content):
 
 ```sh
-# Summary to stderr, JSON results to stdout
+# PDB input
+voronota-ltr -i structure.pdb --probe 1.4
+
+# mmCIF input
+voronota-ltr -i structure.cif --probe 1.4
+
+# XYZR input (last 4 columns: x y z radius)
 voronota-ltr -i atoms.xyzr --probe 1.4
 
 # Save JSON output to file
-voronota-ltr -i atoms.xyzr --probe 1.4 -o results.json
+voronota-ltr -i structure.pdb -o results.json
 
-# Quiet mode (suppress summary)
-voronota-ltr -i atoms.xyzr -q -o results.json
+# Quiet mode (suppress log messages)
+voronota-ltr -i structure.pdb -q -o results.json
+
+# Exclude heteroatoms (HETATM records)
+voronota-ltr -i structure.pdb --exclude-heteroatoms
+
+# Include hydrogen atoms (excluded by default)
+voronota-ltr -i structure.pdb --include-hydrogens
+
+# Custom radii file (format: residue atom radius per line)
+voronota-ltr -i structure.pdb --radii-file custom_radii.txt
 
 # With periodic boundary conditions
 voronota-ltr -i atoms.xyzr --periodic-box-corners 0 0 0 100 100 100

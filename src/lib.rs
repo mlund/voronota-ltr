@@ -32,6 +32,7 @@
 
 mod contact;
 mod geometry;
+pub mod input;
 mod solvent_spheres;
 mod spheres_container;
 mod spheres_searcher;
