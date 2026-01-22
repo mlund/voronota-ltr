@@ -1,0 +1,42 @@
+{
+    "title": "Voronota-LT in Rust",
+    "description": "Rust implementation of Voronota-LT for computing radical Voronoi tessellation of atomic structures, providing inter-atom contact areas, solvent-accessible surface areas, and volumes.",
+    "creators": [
+        {
+            "name": "Kliment Olechnovic",
+            "orcid": "0000-0003-4918-9505"
+        },
+        {
+            "name": "Mikael Lund",
+            "affiliation": "Division of Theoretical Chemistry, Department of Chemistry, Lund University, Sweden",
+            "orcid": "0000-0001-8178-8175"
+        }
+    ],
+    "keywords": [
+        "voronoi tessellation",
+        "solvent accessible surface area",
+        "molecular structure",
+        "bioinformatics",
+        "computational chemistry"
+    ],
+    "related_identifiers": [
+        {
+            "scheme": "url",
+            "identifier": "https://github.com/mlund/voronota-ltr",
+            "relation": "isSupplementTo"
+        },
+        {
+            "scheme": "url",
+            "identifier": "https://github.com/kliment-olechnovic/voronota",
+            "relation": "isDerivedFrom"
+        },
+        {
+            "scheme": "doi",
+            "identifier": "10.1093/bioinformatics/btab448",
+            "relation": "isDerivedFrom"
+        }
+    ],
+    "license": "mit-license",
+    "access_right": "open",
+    "upload_type": "software"
+}
