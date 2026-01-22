@@ -36,7 +36,7 @@ impl ContourPoint {
 type Contour = Vec<ContourPoint>;
 
 /// Full contact descriptor (internal use)
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct ContactDescriptor {
     contour: Contour,
     pub intersection_circle: Sphere,
@@ -51,26 +51,6 @@ pub struct ContactDescriptor {
     pub distance: f64,
     pub id_a: usize,
     pub id_b: usize,
-}
-
-impl Default for ContactDescriptor {
-    fn default() -> Self {
-        Self {
-            contour: Vec::new(),
-            intersection_circle: Sphere::from_coords(0.0, 0.0, 0.0, 0.0),
-            axis: Vector3::zeros(),
-            contour_barycenter: Point3::origin(),
-            sum_of_arc_angles: 0.0,
-            area: 0.0,
-            solid_angle_a: 0.0,
-            solid_angle_b: 0.0,
-            pyramid_volume_a: 0.0,
-            pyramid_volume_b: 0.0,
-            distance: 0.0,
-            id_a: 0,
-            id_b: 0,
-        }
-    }
 }
 
 impl ContactDescriptor {
@@ -100,12 +80,9 @@ pub fn construct_contact_descriptor(
     b_id: usize,
     neighbors: &[ValuedId],
 ) -> Option<ContactDescriptor> {
-    if a_id >= spheres.len() || b_id >= spheres.len() {
+    let (Some(a), Some(b)) = (spheres.get(a_id), spheres.get(b_id)) else {
         return None;
-    }
-
-    let a = &spheres[a_id];
-    let b = &spheres[b_id];
+    };
 
     // Check basic intersection conditions
     if !sphere_intersects_sphere(a, b)

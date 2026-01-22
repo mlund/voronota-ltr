@@ -25,7 +25,7 @@ impl Ball {
 }
 
 /// Internal sphere representation with nalgebra Point3.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Default)]
 pub struct Sphere {
     /// Center point of the sphere.
     pub center: Point3<f64>,
@@ -38,6 +38,8 @@ impl Sphere {
         Self { center, r }
     }
 
+    #[allow(dead_code)]
+    #[must_use]
     pub const fn from_coords(x: f64, y: f64, z: f64, r: f64) -> Self {
         Self {
             center: Point3::new(x, y, z),
@@ -348,7 +350,7 @@ pub enum CellStage {
 }
 
 /// Cell contact summary for computing SAS area and volume.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct CellContactSummary {
     /// Sphere index this summary belongs to.
     pub id: usize,
@@ -372,24 +374,6 @@ pub struct CellContactSummary {
     pub count: usize,
     /// Processing stage.
     pub stage: CellStage,
-}
-
-impl Default for CellContactSummary {
-    fn default() -> Self {
-        Self {
-            id: 0,
-            area: 0.0,
-            arc_length: 0.0,
-            explained_solid_angle_positive: 0.0,
-            explained_solid_angle_negative: 0.0,
-            explained_pyramid_volume_positive: 0.0,
-            explained_pyramid_volume_negative: 0.0,
-            sas_area: 0.0,
-            sas_inside_volume: 0.0,
-            count: 0,
-            stage: CellStage::Init,
-        }
-    }
 }
 
 impl CellContactSummary {

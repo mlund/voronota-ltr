@@ -106,23 +106,22 @@ fn collect_collision_pairs(
     groups: Option<&[i32]>,
     periodic_n: Option<usize>,
 ) -> Vec<(usize, usize)> {
-    let mut pairs = Vec::new();
-    for (a_id, neighbors) in all_collisions.iter().enumerate() {
-        for neighbor in neighbors {
-            let b_id = neighbor.index;
-            let b_canonical = periodic_n.map_or(b_id, |n| b_id % n);
+    all_collisions
+        .iter()
+        .enumerate()
+        .flat_map(|(a_id, neighbors)| {
+            neighbors.iter().filter_map(move |neighbor| {
+                let b_id = neighbor.index;
+                let b_canonical = periodic_n.map_or(b_id, |n| b_id % n);
 
-            if same_group(groups, a_id, b_canonical) {
-                continue;
-            }
+                if same_group(groups, a_id, b_canonical) {
+                    return None;
+                }
 
-            // Include periodic images unconditionally; canonical pairs use a < b ordering
-            if periodic_n.is_some_and(|n| b_id >= n) || a_id < b_id {
-                pairs.push((a_id, b_id));
-            }
-        }
-    }
-    pairs
+                (periodic_n.is_some_and(|n| b_id >= n) || a_id < b_id).then_some((a_id, b_id))
+            })
+        })
+        .collect()
 }
 
 /// Check if two spheres belong to the same group
