@@ -7,6 +7,9 @@ use std::path::{Path, PathBuf};
 use voronota_ltr::input::{ParseOptions, RadiiLookup, parse_file};
 use voronota_ltr::{Results, compute_tessellation};
 
+/// Default tolerance for floating-point comparisons
+const EPSILON: f64 = 0.01;
+
 /// Get the test data directory path (repo-local tests/data/).
 fn get_test_data_dir() -> PathBuf {
     let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| ".".to_string());
@@ -15,6 +18,9 @@ fn get_test_data_dir() -> PathBuf {
 
 /// Helper macro for approximate equality assertions with tolerance.
 macro_rules! assert_approx_eq {
+    ($a:expr, $b:expr) => {
+        assert_approx_eq!($a, $b, EPSILON)
+    };
     ($a:expr, $b:expr, $tol:expr) => {{
         let (a, b, tol) = ($a, $b, $tol);
         assert!(
@@ -65,8 +71,8 @@ fn pdb_1ctf_contacts() {
     assert_eq!(result.contacts.len(), 3078, "Expected 3078 contacts");
     assert_eq!(result.cells.len(), 492, "Expected 492 cells");
 
-    assert_approx_eq!(result.total_sas_area(), 4097.64, 1.0);
-    assert_approx_eq!(result.total_contact_area(), 10663.9, 5.0);
+    assert_approx_eq!(result.total_sas_area(), 4097.64);
+    assert_approx_eq!(result.total_contact_area(), 10663.91);
 }
 
 #[test]
@@ -312,8 +318,8 @@ fn custom_radii_file() {
     // C++ reference values from contacts_1ctf_pdb_as_assembly_with_heteroatoms_using_custom_radii_summary.txt
     assert_eq!(balls.len(), 984, "Expected 984 balls");
     assert_eq!(result.contacts.len(), 6354, "Expected 6354 contacts");
-    assert_approx_eq!(result.total_sas_area(), 7094.42, 1.0);
-    assert_approx_eq!(result.total_contact_area(), 21423.5, 5.0);
+    assert_approx_eq!(result.total_sas_area(), 7094.42);
+    assert_approx_eq!(result.total_contact_area(), 21423.54);
 }
 
 #[test]

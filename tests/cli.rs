@@ -3,16 +3,25 @@ use std::process::{Command, Stdio};
 
 use serde::Deserialize;
 
+/// Default tolerance for floating-point comparisons
+const EPSILON: f64 = 0.01;
+
 fn binary() -> Command {
     Command::new(env!("CARGO_BIN_EXE_voronota-ltr"))
 }
 
-fn assert_approx(name: &str, actual: f64, expected: f64, tolerance: f64) {
-    let diff = (actual - expected).abs();
-    assert!(
-        diff <= tolerance,
-        "{name}: expected {expected}, got {actual} (diff {diff} > {tolerance})"
-    );
+macro_rules! assert_approx {
+    ($name:expr, $actual:expr, $expected:expr) => {
+        assert_approx!($name, $actual, $expected, EPSILON)
+    };
+    ($name:expr, $actual:expr, $expected:expr, $tol:expr) => {{
+        let (name, actual, expected, tol) = ($name, $actual, $expected, $tol);
+        let diff = (actual - expected).abs();
+        assert!(
+            diff <= tol,
+            "{name}: expected {expected}, got {actual} (diff {diff} > {tol})"
+        );
+    }};
 }
 
 #[derive(Deserialize)]
@@ -60,9 +69,9 @@ fn test_balls_cs_1x1() {
     let total_sas_area: f64 = result.cells.iter().map(|c| c.sas_area).sum();
     let total_volume: f64 = result.cells.iter().map(|c| c.volume).sum();
 
-    assert_approx("total_contact_area", total_contact_area, 3992.55, 1.0);
-    assert_approx("total_sas_area", total_sas_area, 21979.6, 10.0);
-    assert_approx("total_volume", total_volume, 46419.9, 10.0);
+    assert_approx!("total_contact_area", total_contact_area, 3992.55);
+    assert_approx!("total_sas_area", total_sas_area, 21979.64);
+    assert_approx!("total_volume", total_volume, 46419.87);
 }
 
 #[test]
@@ -96,9 +105,9 @@ fn test_balls_cs_1x1_periodic() {
     let total_sas_area: f64 = result.cells.iter().map(|c| c.sas_area).sum();
     let total_volume: f64 = result.cells.iter().map(|c| c.volume).sum();
 
-    assert_approx("total_contact_area", total_contact_area, 4812.14, 0.01);
-    assert_approx("total_sas_area", total_sas_area, 20023.06, 0.01);
-    assert_approx("total_volume", total_volume, 45173.20, 0.01);
+    assert_approx!("total_contact_area", total_contact_area, 4812.14);
+    assert_approx!("total_sas_area", total_sas_area, 20023.06);
+    assert_approx!("total_volume", total_volume, 45173.20);
 }
 
 #[test]
@@ -136,9 +145,9 @@ fn test_balls_cs_1x1_periodic_directions() {
     let total_sas_area: f64 = result.cells.iter().map(|c| c.sas_area).sum();
     let total_volume: f64 = result.cells.iter().map(|c| c.volume).sum();
 
-    assert_approx("total_contact_area", total_contact_area, 4812.14, 0.01);
-    assert_approx("total_sas_area", total_sas_area, 20023.06, 0.01);
-    assert_approx("total_volume", total_volume, 45173.20, 0.01);
+    assert_approx!("total_contact_area", total_contact_area, 4812.14);
+    assert_approx!("total_sas_area", total_sas_area, 20023.06);
+    assert_approx!("total_volume", total_volume, 45173.20);
 }
 
 #[test]

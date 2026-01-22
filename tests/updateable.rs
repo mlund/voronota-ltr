@@ -3,9 +3,12 @@
 use std::fs;
 use voronota_ltr::{Ball, PeriodicBox, UpdateableTessellation, compute_tessellation};
 
+/// Default tolerance for floating-point comparisons
+const EPSILON: f64 = 0.01;
+
 /// Macro for approximate equality with context
 macro_rules! assert_approx {
-    ($actual:expr, $expected:expr, $eps:expr, $($arg:tt)*) => {
+    ($actual:expr, $expected:expr, $eps:expr, $($arg:tt)*) => {{
         let actual = $actual;
         let expected = $expected;
         let diff = (actual - expected).abs();
@@ -17,7 +20,7 @@ macro_rules! assert_approx {
             actual,
             diff
         );
-    };
+    }};
 }
 
 /// Dataset definition for reuse across tests
