@@ -8,7 +8,8 @@ readme = "README.md"
 categories = ["science"]
 homepage = "https://www.voronota.com/expansion_lt"
 repository = "https://github.com/mlund/voronota-ltr"
-keywords = ["voronoi-tessellation", "surface-area", "molecules"]
+keywords = ["voronoi", "tessellation", "molecule", "sasa", "bioinformatics"]
+description = "Voronota-LT is an alternative version of Voronota for constructing tessellation-derived atomic contact areas and volumes."
 
 [features]
 default = ["serde"]

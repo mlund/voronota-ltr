@@ -27,9 +27,7 @@ The port can be used either as a library for other projects, or as a basic CLI t
 cargo install voronota-ltr
 ```
 
-## Usage
-
-### API
+## Examples
 
 ```rust
 use voronota_ltr::{Ball, compute_tessellation};
@@ -51,7 +49,7 @@ for cell in &result.cells {
 }
 ```
 
-#### With periodic boundary conditions
+### With periodic boundary conditions
 
 ```rust
 use voronota_ltr::{Ball, PeriodicBox, compute_tessellation};
@@ -62,7 +60,7 @@ let pbox = PeriodicBox::from_corners((0.0, 0.0, 0.0), (10.0, 10.0, 10.0));
 let result = compute_tessellation(&balls, 1.4, Some(&pbox), None);
 ```
 
-#### Updateable tessellation
+### Updateable tessellation
 
 For simulations where only a few spheres change position each step, `UpdateableTessellation`
 provides efficient incremental updates:
