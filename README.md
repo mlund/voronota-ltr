@@ -3,7 +3,7 @@
 # Voronota-LT in Rust
 
 Experimental, native Rust port of [voronota-lt](https://github.com/kliment-olechnovic/voronota/tree/master/expansion_lt)
-originally written in C++.
+originally written in C++. Replaces the previous [bindings crate](https://github.com/mlund/voronota-rs).
 Computes radical Voronoi tessellation of atomic balls constrained inside a solvent-accessible surface.
 Outputs inter-atom contact areas, solvent accessible surface (SAS) areas, and volumes.
 
