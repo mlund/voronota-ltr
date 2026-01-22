@@ -7,7 +7,7 @@
 //! # Example
 //!
 //! ```
-//! use voronota_ltr::{Ball, TessellationResults, compute_tessellation};
+//! use voronota_ltr::{Ball, Results, compute_tessellation};
 //!
 //! let balls = vec![
 //!     Ball::new(0.0, 0.0, 0.0, 1.5),
@@ -42,5 +42,5 @@ mod updateable;
 pub use solvent_spheres::{SolventSphere, SolventSpheresError, compute_solvent_spheres};
 pub use subdivided_icosahedron::SubdivisionDepth;
 pub use tessellation::compute_tessellation;
-pub use types::{Ball, Cell, Contact, PeriodicBox, TessellationResult, TessellationResults};
+pub use types::{Ball, Cell, Contact, PeriodicBox, Results, TessellationResult};
 pub use updateable::{UpdateableResult, UpdateableTessellation};

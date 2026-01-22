@@ -121,7 +121,7 @@ impl Ord for ValuedId {
 }
 
 /// Trait for accessing tessellation results (contacts and cells).
-pub trait TessellationResults {
+pub trait Results {
     /// Number of balls in the tessellation.
     fn num_balls(&self) -> usize;
 
@@ -191,7 +191,7 @@ pub struct TessellationResult {
     pub cells: Vec<Cell>,
 }
 
-impl TessellationResults for TessellationResult {
+impl Results for TessellationResult {
     fn num_balls(&self) -> usize {
         self.num_balls
     }

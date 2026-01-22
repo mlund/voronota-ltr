@@ -55,7 +55,7 @@ impl UpdateableResult {
     }
 }
 
-impl crate::types::TessellationResults for UpdateableResult {
+impl crate::types::Results for UpdateableResult {
     fn num_balls(&self) -> usize {
         self.num_balls
     }
