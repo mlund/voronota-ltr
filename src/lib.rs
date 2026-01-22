@@ -1,4 +1,5 @@
-//! Rust port of voronota-lt for computing radical tessellation contacts and cells.
+//! Native rust port of [voronota-lt](https://github.com/kliment-olechnovic/voronota/tree/master/expansion_lt)
+//! for computing radical tessellation contacts and cells.
 //!
 //! This library computes the radical Voronoi tessellation of a set of spheres,
 //! providing contact areas between neighboring spheres and solvent-accessible
