@@ -19,25 +19,40 @@ use crate::Ball;
 /// Parsed atom record with coordinates and metadata.
 #[derive(Clone, Debug)]
 pub struct AtomRecord {
+    /// Record type: "ATOM" or "HETATM".
     pub record_name: String,
+    /// Atom serial number.
     pub serial: i32,
+    /// Atom name (e.g., "CA", "N", "O").
     pub name: String,
+    /// Alternate location indicator.
     pub alt_loc: String,
+    /// Residue name (e.g., "ALA", "GLY").
     pub res_name: String,
+    /// Chain identifier.
     pub chain_id: String,
+    /// Residue sequence number.
     pub res_seq: i32,
+    /// Insertion code.
     pub i_code: String,
+    /// X coordinate in Ångströms.
     pub x: f64,
+    /// Y coordinate in Ångströms.
     pub y: f64,
+    /// Z coordinate in Ångströms.
     pub z: f64,
+    /// Element symbol (e.g., "C", "N", "O").
     pub element: String,
 }
 
 /// Input file format.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum InputFormat {
+    /// Protein Data Bank format (.pdb, .ent, .pdb1).
     Pdb,
+    /// Macromolecular Crystallographic Information File (.cif, .mmcif).
     Mmcif,
+    /// Simple x y z radius format (.xyzr).
     Xyzr,
 }
 

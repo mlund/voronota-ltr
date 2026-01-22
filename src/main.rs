@@ -1,3 +1,5 @@
+//! CLI for computing radical Voronoi tessellation of molecular structures.
+
 use std::fs::File;
 use std::io::{self, BufRead};
 use std::path::PathBuf;

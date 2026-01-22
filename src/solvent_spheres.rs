@@ -36,7 +36,12 @@ pub enum SolventSpheresError {
     /// Volume probe must be non-negative and finite.
     InvalidVolumeProbe(f64),
     /// A ball has invalid coordinates or radius.
-    InvalidBall { index: usize, reason: &'static str },
+    InvalidBall {
+        /// Index of the invalid ball.
+        index: usize,
+        /// Description of why the ball is invalid.
+        reason: &'static str,
+    },
 }
 
 impl std::fmt::Display for SolventSpheresError {
