@@ -71,25 +71,46 @@ pub fn sphere_contains_sphere(a: &Sphere, b: &Sphere) -> bool {
     ge(a.r, b.r) && le((b.center - a.center).norm_squared(), diff_r * diff_r)
 }
 
-/// Signed distance from point to plane
+/// Signed distance from point to plane (normalizes `plane_normal`)
 #[inline]
 pub fn signed_distance_to_plane(
     plane_point: &Point3<f64>,
     plane_normal: &Vector3<f64>,
     x: &Point3<f64>,
 ) -> f64 {
-    plane_normal.normalize().dot(&(x - plane_point))
+    signed_distance_to_plane_unit(plane_point, &plane_normal.normalize(), x)
+}
+
+/// Signed distance from point to plane (assumes `plane_normal` is unit length)
+#[inline]
+pub fn signed_distance_to_plane_unit(
+    plane_point: &Point3<f64>,
+    plane_normal: &Vector3<f64>,
+    x: &Point3<f64>,
+) -> f64 {
+    plane_normal.dot(&(x - plane_point))
 }
 
 /// Determine which halfspace a point lies in relative to a plane
 /// Returns: 1 if positive side, -1 if negative side, 0 if on plane
+#[allow(dead_code)] // Public API, used internally via _unit variant
 #[inline]
 pub fn halfspace_of_point(
     plane_point: &Point3<f64>,
     plane_normal: &Vector3<f64>,
     x: &Point3<f64>,
 ) -> i32 {
-    let sd = signed_distance_to_plane(plane_point, plane_normal, x);
+    halfspace_of_point_unit(plane_point, &plane_normal.normalize(), x)
+}
+
+/// Determine which halfspace a point lies in (assumes `plane_normal` is unit length)
+#[inline]
+pub fn halfspace_of_point_unit(
+    plane_point: &Point3<f64>,
+    plane_normal: &Vector3<f64>,
+    x: &Point3<f64>,
+) -> i32 {
+    let sd = signed_distance_to_plane_unit(plane_point, plane_normal, x);
     if gt(sd, 0.0) {
         1
     } else if lt(sd, 0.0) {

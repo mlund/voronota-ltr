@@ -556,12 +556,13 @@ impl UpdateableTessellation {
     }
 
     /// Deduplicate and canonicalize periodic boundary contacts.
+    /// Clones only the filtered elements to avoid cloning the entire input.
     fn deduplicate_and_canonicalize_contacts(
         summaries: &[ContactDescriptorSummary],
         n: usize,
     ) -> Vec<ContactDescriptorSummary> {
-        use crate::tessellation::deduplicate_periodic_contacts;
-        deduplicate_periodic_contacts(summaries, n)
+        use crate::tessellation::deduplicate_periodic_contacts_ref;
+        deduplicate_periodic_contacts_ref(summaries, n)
             .into_iter()
             .map(|mut s| {
                 s.id_a %= n;

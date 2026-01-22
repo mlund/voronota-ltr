@@ -50,17 +50,9 @@ fn compute_standard(balls: &[Ball], probe: f64, groups: Option<&[i32]>) -> Tesse
     let searcher = SpheresSearcher::new(spheres);
     let spheres = searcher.spheres();
 
-    let collision_data: Vec<_> = (0..spheres.len())
+    let all_collisions: Vec<Vec<ValuedId>> = (0..spheres.len())
         .into_par_iter()
-        .map(|id| {
-            let result = searcher.find_colliding_ids(id, true);
-            (id, result.colliding_ids, result.excluded)
-        })
-        .collect();
-
-    let all_collisions: Vec<Vec<ValuedId>> = collision_data
-        .into_iter()
-        .map(|(_, collisions, _)| collisions)
+        .map(|id| searcher.find_colliding_ids(id, true).colliding_ids)
         .collect();
 
     let collision_pairs = collect_collision_pairs(&all_collisions, groups, None);
@@ -161,18 +153,9 @@ fn compute_periodic(
     let searcher = SpheresSearcher::new(populated_spheres);
 
     // Find collisions for original spheres only (indices 0..n)
-    let collision_data: Vec<_> = (0..n)
+    let all_collisions: Vec<Vec<ValuedId>> = (0..n)
         .into_par_iter()
-        .map(|id| {
-            let result = searcher.find_colliding_ids(id, true);
-            (id, result.colliding_ids, result.excluded)
-        })
-        .collect();
-
-    // Build collision map, keeping periodic image indices
-    let all_collisions: Vec<Vec<ValuedId>> = collision_data
-        .into_iter()
-        .map(|(_, collisions, _)| collisions)
+        .map(|id| searcher.find_colliding_ids(id, true).colliding_ids)
         .collect();
 
     // Collect collision pairs (includes potential duplicates for boundary contacts)
@@ -215,8 +198,8 @@ fn compute_periodic(
         Some(n),
     );
 
-    // Deduplicate boundary contacts for output
-    let deduped_summaries = deduplicate_periodic_contacts(&all_valid_summaries, n);
+    // Deduplicate boundary contacts for output (takes ownership, avoids clone)
+    let deduped_summaries = deduplicate_periodic_contacts(all_valid_summaries, n);
 
     // Build contacts output - canonicalize IDs in final output
     let contacts: Vec<Contact> = deduped_summaries
@@ -236,10 +219,37 @@ fn compute_periodic(
 /// For boundary contacts (where one ID is a periodic image >= n), find the first
 /// contact with the same canonical pair and keep only that one.
 /// Returns summaries with original (non-canonicalized) IDs.
+/// Takes ownership to avoid cloning when caller doesn't need original.
 pub fn deduplicate_periodic_contacts(
+    summaries: Vec<ContactDescriptorSummary>,
+    n: usize,
+) -> Vec<ContactDescriptorSummary> {
+    let canonical_ids = compute_canonical_ids(&summaries, n);
+    summaries
+        .into_iter()
+        .enumerate()
+        .filter(|(i, _)| canonical_ids[*i] == *i)
+        .map(|(_, s)| s)
+        .collect()
+}
+
+/// Reference-based variant that clones only kept elements.
+/// Use when caller needs to retain the original summaries.
+pub fn deduplicate_periodic_contacts_ref(
     summaries: &[ContactDescriptorSummary],
     n: usize,
 ) -> Vec<ContactDescriptorSummary> {
+    let canonical_ids = compute_canonical_ids(summaries, n);
+    summaries
+        .iter()
+        .enumerate()
+        .filter(|(i, _)| canonical_ids[*i] == *i)
+        .map(|(_, s)| s.clone())
+        .collect()
+}
+
+/// Compute canonical IDs for deduplication.
+fn compute_canonical_ids(summaries: &[ContactDescriptorSummary], n: usize) -> Vec<usize> {
     // Build map from canonical spheres to boundary contacts involving them
     let mut sphere_to_boundary_contacts: Vec<Vec<usize>> = vec![Vec::new(); n];
     for (i, summary) in summaries.iter().enumerate() {
@@ -283,13 +293,7 @@ pub fn deduplicate_periodic_contacts(
         }
     }
 
-    // Keep only contacts where canonical_id == index
-    summaries
-        .iter()
-        .enumerate()
-        .filter(|(i, _)| canonical_ids[*i] == *i)
-        .map(|(_, s)| s.clone())
-        .collect()
+    canonical_ids
 }
 
 /// Compute cell SAS areas and volumes from contact summaries.

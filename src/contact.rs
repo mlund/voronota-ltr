@@ -4,9 +4,9 @@ use nalgebra::{Point3, Vector3};
 
 use crate::geometry::{
     any_normal_of_vector, center_of_intersection_circle, directed_angle, float_cmp,
-    halfspace_of_point, intersect_segment_with_circle, intersection_circle_of_two_spheres,
+    halfspace_of_point_unit, intersect_segment_with_circle, intersection_circle_of_two_spheres,
     intersection_of_plane_and_segment, min_dihedral_angle, project_point_inside_line,
-    rotate_point_around_axis, signed_distance_to_plane, sphere_contains_sphere,
+    rotate_point_around_axis, signed_distance_to_plane_unit, sphere_contains_sphere,
     sphere_intersects_sphere, triangle_area,
 };
 use crate::types::{ContactDescriptorSummary, Sphere, ValuedId};
@@ -119,6 +119,7 @@ pub fn construct_contact_descriptor(
         id_a: a_id,
         id_b: b_id,
         intersection_circle: intersection_circle_of_two_spheres(a, b),
+        axis: (b.center - a.center).normalize(), // Pre-compute once
         ..Default::default()
     };
 
@@ -164,7 +165,7 @@ pub fn construct_contact_descriptor(
 
         if cos_val.abs() >= 1.0 {
             // Planes are parallel
-            if halfspace_of_point(
+            if halfspace_of_point_unit(
                 &ac_plane_center,
                 &ac_plane_normal,
                 &cd.intersection_circle.center,
@@ -176,7 +177,8 @@ pub fn construct_contact_descriptor(
         }
 
         // Calculate distance from intersection circle center to the cutting plane
-        let l = signed_distance_to_plane(
+        // ac_plane_normal is already unit-normalized above
+        let l = signed_distance_to_plane_unit(
             &ac_plane_center,
             &ac_plane_normal,
             &cd.intersection_circle.center,
@@ -186,7 +188,7 @@ pub fn construct_contact_descriptor(
 
         if xl >= cd.intersection_circle.r {
             // Cutting plane doesn't intersect the circle
-            if halfspace_of_point(
+            if halfspace_of_point_unit(
                 &ac_plane_center,
                 &ac_plane_normal,
                 &cd.intersection_circle.center,
@@ -199,7 +201,6 @@ pub fn construct_contact_descriptor(
 
         // Initialize contour if needed
         if !contour_initialized {
-            cd.axis = (b.center - a.center).normalize();
             init_contour(&mut cd.contour, a_id, &cd.intersection_circle, &cd.axis);
             contour_initialized = true;
         } else if !test_contour_cuttable(&a.center, &ac_plane_center, &cd.contour) {
@@ -226,7 +227,6 @@ pub fn construct_contact_descriptor(
     // Finalize the contact descriptor
     if !contour_initialized {
         // Full circle contact (no cuts)
-        cd.axis = (b.center - a.center).normalize();
         cd.contour_barycenter = cd.intersection_circle.center;
         cd.sum_of_arc_angles = TAU;
         cd.area = cd.intersection_circle.r * cd.intersection_circle.r * PI;
@@ -336,7 +336,7 @@ fn mark_contour(
 ) -> usize {
     let mut count = 0;
     for cp in contour.iter_mut() {
-        if halfspace_of_point(plane_center, plane_normal, &cp.p) >= 0 {
+        if halfspace_of_point_unit(plane_center, plane_normal, &cp.p) >= 0 {
             cp.left_id = c_id;
             cp.right_id = c_id;
             count += 1;
