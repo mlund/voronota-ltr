@@ -3,7 +3,20 @@ use std::io::{self, BufRead, BufReader};
 use std::path::PathBuf;
 
 use clap::Parser;
-use voronota_ltr::{Ball, PeriodicBox, compute_tessellation};
+use serde::Serialize;
+use voronota_ltr::{Ball, PeriodicBox, Results, TessellationResult, compute_tessellation};
+
+/// Extended JSON output including per-ball SASA/volumes and totals
+#[derive(Serialize)]
+struct JsonOutput {
+    #[serde(flatten)]
+    result: TessellationResult,
+    sas_areas: Vec<f64>,
+    volumes: Vec<f64>,
+    total_sas_area: f64,
+    total_volume: f64,
+    total_contact_area: f64,
+}
 
 #[derive(Parser)]
 #[command(name = "voronota_ltr")]
@@ -89,13 +102,23 @@ fn main() -> io::Result<()> {
         );
     }
 
+    // Build extended JSON output with per-ball SASA/volumes and totals
+    let output = JsonOutput {
+        sas_areas: result.sas_areas(),
+        volumes: result.volumes(),
+        total_sas_area: result.total_sas_area(),
+        total_volume: result.total_volume(),
+        total_contact_area: result.total_contact_area(),
+        result,
+    };
+
     // Write JSON output
     if let Some(path) = &cli.output {
         let file = File::create(path)?;
-        serde_json::to_writer_pretty(file, &result)?;
+        serde_json::to_writer_pretty(file, &output)?;
     } else {
         let stdout = io::stdout().lock();
-        serde_json::to_writer_pretty(stdout, &result)?;
+        serde_json::to_writer_pretty(stdout, &output)?;
         println!();
     }
 

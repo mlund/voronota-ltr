@@ -112,6 +112,28 @@ voronota-ltr -i atoms.xyzr -q -o results.json
 voronota-ltr -i atoms.xyzr --periodic-box-corners 0 0 0 100 100 100
 ```
 
+#### Loading JSON output in Python
+
+```python
+import json
+
+with open("results.json") as f:
+    data = json.load(f)
+
+# Per-ball data (indexed by ball)
+sas_areas = data["sas_areas"]
+volumes = data["volumes"]
+
+# Totals
+total_sasa = data["total_sas_area"]
+total_volume = data["total_volume"]
+total_contact_area = data["total_contact_area"]
+
+# Contact details
+for contact in data["contacts"]:
+    print(f"Contact {contact['id_a']}-{contact['id_b']}: area={contact['area']:.2f}")
+```
+
 ## Benchmarks
 
 Run benchmarks with `cargo bench`.
