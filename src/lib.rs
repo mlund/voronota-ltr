@@ -36,9 +36,7 @@ mod tessellation;
 mod types;
 mod updateable;
 
-pub use solvent_spheres::{
-    SolventSphere, SolventSpheresError, SolventSpheresParams, compute_solvent_spheres,
-};
+pub use solvent_spheres::{SolventSphere, SolventSpheresError, compute_solvent_spheres};
 pub use subdivided_icosahedron::SubdivisionDepth;
 pub use tessellation::compute_tessellation;
 pub use types::{Ball, Cell, Contact, PeriodicBox, TessellationResult};
