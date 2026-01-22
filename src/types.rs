@@ -323,7 +323,9 @@ pub struct ContactDescriptorSummary {
 }
 
 impl ContactDescriptorSummary {
-    /// Ensure `id_a` < `id_b`, swapping related values if needed
+    /// Ensure `id_a` < `id_b`, swapping related values if needed.
+    /// Note: `solid_angle` and `pyramid_volume` are perspective-dependent (from sphere A vs B),
+    /// so they must be swapped. Distance is symmetric and unchanged.
     pub const fn ensure_ids_ordered(&mut self) {
         if self.id_a > self.id_b {
             std::mem::swap(&mut self.id_a, &mut self.id_b);
@@ -403,6 +405,8 @@ impl CellContactSummary {
                 (cds.solid_angle_b, cds.pyramid_volume_b)
             };
 
+            // Accumulate positive/negative separately for numerical stability
+            // and to determine dominant orientation later in compute_sas
             self.explained_solid_angle_positive += solid_angle.max(0.0);
             self.explained_solid_angle_negative -= solid_angle.min(0.0);
             self.explained_pyramid_volume_positive += pyramid_volume.max(0.0);
@@ -434,6 +438,8 @@ impl CellContactSummary {
         let diff =
             (self.explained_solid_angle_positive - self.explained_solid_angle_negative).abs();
         if self.arc_length > 0.0 && diff > 1e-10 {
+            // Positive dominance: sphere mostly exposed, SAS = full sphere minus covered part
+            // Negative dominance: sphere mostly buried, SAS = just the exposed segment
             if self.explained_solid_angle_positive > self.explained_solid_angle_negative {
                 let angle_diff =
                     self.explained_solid_angle_positive - self.explained_solid_angle_negative;

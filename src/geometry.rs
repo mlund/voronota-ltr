@@ -160,6 +160,7 @@ pub fn directed_angle(o: &Point3<f64>, a: &Point3<f64>, b: &Point3<f64>, c: &Poi
     if (c - o).dot(&n) >= 0.0 {
         angle
     } else {
+        // Control point on negative side means we want the reflex angle
         TAU - angle
     }
 }
@@ -191,7 +192,9 @@ pub fn rotate_point_around_axis(axis: &Vector3<f64>, angle: f64, p: &Vector3<f64
     rotation * p
 }
 
-/// Distance from sphere a center to intersection circle center with sphere b
+/// Distance from sphere a center to intersection circle center with sphere b.
+/// Uses law of cosines: cos(γ) = (a.r² + cm² - b.r²) / (2·a.r·cm)
+/// where γ is the angle at a's center, giving distance = a.r · cos(γ).
 pub fn distance_to_intersection_circle_center(a: &Sphere, b: &Sphere) -> f64 {
     let cm = (b.center - a.center).norm();
     if cm < EPSILON {

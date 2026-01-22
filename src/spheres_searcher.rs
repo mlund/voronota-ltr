@@ -291,7 +291,8 @@ impl SpheresSearcher {
                                     continue;
                                 }
 
-                                // Check if central sphere is hidden by candidate
+                                // Check if central sphere is hidden (fully contained) by candidate.
+                                // For identical spheres, use id ordering as tiebreaker for determinism.
                                 if discard_hidden
                                     && sphere_contains_sphere(candidate, central_sphere)
                                     && (!sphere_equals_sphere(candidate, central_sphere)

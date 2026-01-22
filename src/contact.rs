@@ -269,7 +269,8 @@ pub fn construct_contact_descriptor(
     Some(cd)
 }
 
-// 1.19 ≈ 1/cos(30°): ensures hexagon vertices are outside the circle
+// Hexagon vertices must lie outside the intersection circle to ensure
+// robust cutting when neighbors modify the contour. 1.19 ≈ 1/cos(30°).
 const HEXAGON_SCALE: f64 = 1.19;
 
 /// Initialize hexagonal contour from intersection circle.
@@ -368,9 +369,9 @@ fn cut_contour(
         return;
     };
 
-    // Handle wrap-around case
+    // Handle wrap-around: outsiders span both ends of the contour array,
+    // so we must find where the insider segment actually begins/ends
     if start == 0 && end == contour.len() - 1 {
-        // Find the actual start/end accounting for wrap
         end = 0;
         while end + 1 < contour.len()
             && contour[end + 1].left_id == c_id
@@ -637,6 +638,7 @@ fn calculate_solid_angle(a: &Sphere, b: &Sphere, ic: &Sphere, contour: &Contour)
 
             if pr0.angle > 0.0 {
                 let mut d = (b.center - a.center).cross(&(pr1.p - ic.center));
+                // Flip normal when arc angle and dihedral have incompatible orientations
                 let should_flip = (pr0.angle < PI && d.dot(&(pr0.p - pr1.p)) < 0.0)
                     || (pr0.angle > PI && d.dot(&(pr0.p - pr1.p)) > 0.0);
                 if should_flip {

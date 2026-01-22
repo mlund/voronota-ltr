@@ -277,7 +277,7 @@ fn compute_canonical_ids(summaries: &[ContactDescriptorSummary], n: usize) -> Ve
             let sphere_id_a = summary.id_a % n;
             let sphere_id_b = summary.id_b % n;
 
-            // Search in the smaller candidate list
+            // Search in the smaller candidate list for O(n) speedup
             let candidates = if sphere_to_boundary_contacts[sphere_id_a].len()
                 <= sphere_to_boundary_contacts[sphere_id_b].len()
             {

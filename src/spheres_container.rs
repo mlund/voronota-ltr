@@ -98,6 +98,7 @@ impl SpheresContainer {
             return None;
         }
 
+        // Full reinit is faster than incremental when many spheres change
         if changed.len() > threshold {
             self.init(new_spheres.to_vec(), self.periodic_box);
             return Some(UpdateResult {
