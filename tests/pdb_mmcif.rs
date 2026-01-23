@@ -4,7 +4,8 @@ mod common;
 
 use approx::assert_abs_diff_eq;
 use common::{EPSILON, parse_reference_cells, require_test_file};
-use voronota_ltr::input::{ParseOptions, RadiiLookup, parse_file};
+use voronota_ltr::FileComputeError;
+use voronota_ltr::input::{ParseOptions, RadiiLookup, compute_tessellation_from_file, parse_file};
 use voronota_ltr::{Results, compute_tessellation};
 
 #[test]
@@ -349,4 +350,96 @@ fn selection_counts_match_mdtraj() {
             sel_str, expected, actual
         );
     }
+}
+
+// Tests for compute_tessellation_from_file
+
+#[test]
+fn compute_from_file_basic() {
+    let Some(path) = require_test_file("assembly_1ctf.pdb1") else {
+        return;
+    };
+
+    let result =
+        compute_tessellation_from_file(&path, 1.4, None, false, None).expect("Should succeed");
+
+    assert_eq!(result.contacts.len(), 3078, "Expected 3078 contacts");
+    assert_eq!(result.cells.len(), 492, "Expected 492 cells");
+    assert_abs_diff_eq!(result.total_sas_area(), 4097.64, epsilon = EPSILON);
+}
+
+#[test]
+fn compute_from_file_with_cell_vertices() {
+    let Some(path) = require_test_file("assembly_1ctf.pdb1") else {
+        return;
+    };
+
+    let result =
+        compute_tessellation_from_file(&path, 1.4, None, true, None).expect("Should succeed");
+
+    // With cell vertices, we get tessellation network data
+    assert!(
+        result.cell_vertices.is_some(),
+        "Should have cell vertices when requested"
+    );
+    assert!(
+        result.cell_edges.is_some(),
+        "Should have cell edges when requested"
+    );
+    assert!(
+        !result.cell_vertices.unwrap().is_empty(),
+        "Cell vertices should not be empty"
+    );
+}
+
+#[test]
+fn compute_from_file_with_selections() {
+    let Some(path) = require_test_file("assembly_1ctf.cif") else {
+        return;
+    };
+
+    // Two chain selections for inter-chain contacts
+    let result =
+        compute_tessellation_from_file(&path, 1.4, None, false, Some(&["chain A", "chain A-2"]))
+            .expect("Should succeed with valid selections");
+
+    // Should have inter-chain contacts only
+    assert!(
+        result.contacts.len() < 6354,
+        "Inter-chain contacts should be fewer than all contacts"
+    );
+}
+
+#[test]
+fn compute_from_file_too_few_selections() {
+    let Some(path) = require_test_file("assembly_1ctf.pdb1") else {
+        return;
+    };
+
+    let result = compute_tessellation_from_file(&path, 1.4, None, false, Some(&["protein"]));
+
+    assert!(
+        matches!(result, Err(FileComputeError::TooFewSelections)),
+        "Should fail with single selection"
+    );
+}
+
+#[test]
+fn compute_from_file_xyzr_with_selections_fails() {
+    use std::io::Write;
+
+    // Create a temporary XYZR file
+    let dir = tempfile::tempdir().expect("Failed to create temp dir");
+    let xyzr_path = dir.path().join("test.xyzr");
+    let mut file = std::fs::File::create(&xyzr_path).expect("Failed to create file");
+    writeln!(file, "0.0 0.0 0.0 1.5").expect("Failed to write");
+    writeln!(file, "3.0 0.0 0.0 1.5").expect("Failed to write");
+
+    let result =
+        compute_tessellation_from_file(&xyzr_path, 1.4, None, false, Some(&["protein", "hetatm"]));
+
+    assert!(
+        matches!(result, Err(FileComputeError::SelectionRequiresRecords)),
+        "Should fail when using selections with XYZR format"
+    );
 }

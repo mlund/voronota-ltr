@@ -729,7 +729,7 @@ impl Selection {
 /// Parse multiple selections separated by `;`.
 /// # Errors
 /// Returns error if parsing fails or fewer than two selections provided.
-pub fn parse_selections(inputs: &[String]) -> Result<Vec<Selection>, SelectionError> {
+pub fn parse_selections<S: AsRef<str>>(inputs: &[S]) -> Result<Vec<Selection>, SelectionError> {
     if inputs.len() < 2 {
         return Err(SelectionError {
             message: "At least two selections required".to_string(),
@@ -741,7 +741,7 @@ pub fn parse_selections(inputs: &[String]) -> Result<Vec<Selection>, SelectionEr
         .iter()
         .enumerate()
         .map(|(idx, input)| {
-            Selection::parse(input.trim()).map_err(|mut e| {
+            Selection::parse(input.as_ref().trim()).map_err(|mut e| {
                 e.position = idx;
                 e
             })

@@ -53,6 +53,7 @@ pub(crate) mod types;
 mod updateable;
 
 pub use graphics::GraphicsWriter;
+pub use input::{FileComputeError, compute_tessellation_from_file};
 pub use solvent_spheres::{SolventSphere, SolventSpheresError, compute_solvent_spheres};
 pub use subdivided_icosahedron::SubdivisionDepth;
 pub use tessellation::compute_tessellation;

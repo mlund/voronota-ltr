@@ -417,6 +417,144 @@ pub fn build_residue_grouping(records: &[AtomRecord]) -> Vec<i32> {
         .collect()
 }
 
+/// Error type for file-based tessellation computation.
+#[derive(Debug)]
+pub enum FileComputeError {
+    /// I/O error reading file.
+    Io(io::Error),
+    /// Selection parsing error.
+    Selection(SelectionError),
+    /// Selections require PDB or mmCIF input (not XYZR).
+    SelectionRequiresRecords,
+    /// At least two selections required for grouping.
+    TooFewSelections,
+}
+
+impl std::fmt::Display for FileComputeError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Io(e) => write!(f, "I/O error: {e}"),
+            Self::Selection(e) => write!(f, "selection error: {e}"),
+            Self::SelectionRequiresRecords => {
+                write!(f, "selections require PDB or mmCIF input (not XYZR)")
+            }
+            Self::TooFewSelections => {
+                write!(f, "at least two selections required for grouping")
+            }
+        }
+    }
+}
+
+impl std::error::Error for FileComputeError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Io(e) => Some(e),
+            Self::Selection(e) => Some(e),
+            Self::SelectionRequiresRecords | Self::TooFewSelections => None,
+        }
+    }
+}
+
+impl From<io::Error> for FileComputeError {
+    fn from(e: io::Error) -> Self {
+        Self::Io(e)
+    }
+}
+
+impl From<SelectionError> for FileComputeError {
+    fn from(e: SelectionError) -> Self {
+        Self::Selection(e)
+    }
+}
+
+/// Compute tessellation directly from a molecular structure file.
+///
+/// This is a high-level convenience function that combines file parsing,
+/// optional selection-based grouping, and tessellation computation.
+///
+/// # Arguments
+///
+/// * `path` - Path to input file (PDB, mmCIF, or XYZR format)
+/// * `probe` - Rolling probe radius (typically 1.4 Å for water)
+/// * `periodic_box` - Optional periodic boundary conditions
+/// * `with_cell_vertices` - Include tessellation vertices and edges in output
+/// * `group_selections` - Optional VMD-like selection strings for inter-group contacts.
+///   When provided, must contain at least two selections. Only contacts between atoms
+///   in different groups are computed.
+///
+/// # Example
+///
+/// ```no_run
+/// use std::path::Path;
+/// use voronota_ltr::input::compute_tessellation_from_file;
+/// use voronota_ltr::Results;
+///
+/// // Basic usage
+/// let result = compute_tessellation_from_file(
+///     Path::new("structure.pdb"),
+///     1.4,
+///     None,
+///     false,
+///     None,
+/// ).unwrap();
+/// println!("Total SAS area: {:.2}", result.total_sas_area());
+///
+/// // With selections for protein-ligand interface
+/// let result = compute_tessellation_from_file(
+///     Path::new("complex.pdb"),
+///     1.4,
+///     None,
+///     false,
+///     Some(&["protein", "resname LIG"]),
+/// ).unwrap();
+/// ```
+///
+/// # Errors
+///
+/// Returns error if:
+/// - File cannot be read or format cannot be detected
+/// - Selection syntax is invalid
+/// - Fewer than two selections are provided
+/// - Selections are used with XYZR format (which has no atom metadata)
+pub fn compute_tessellation_from_file(
+    path: &Path,
+    probe: f64,
+    periodic_box: Option<&crate::PeriodicBox>,
+    with_cell_vertices: bool,
+    group_selections: Option<&[&str]>,
+) -> Result<crate::TessellationResult, FileComputeError> {
+    // Validate selection count early
+    if let Some(sels) = group_selections
+        && sels.len() < 2
+    {
+        return Err(FileComputeError::TooFewSelections);
+    }
+
+    let parse_options = ParseOptions::default();
+    let radii = RadiiLookup::new();
+
+    let parsed = parse_file_with_records(path, &parse_options, &radii)?;
+
+    // Build grouping from selections if provided
+    let grouping = if let Some(sel_strings) = group_selections {
+        if parsed.records.is_empty() {
+            return Err(FileComputeError::SelectionRequiresRecords);
+        }
+        let sels = parse_selections(sel_strings)?;
+        Some(build_custom_grouping(&parsed.records, &sels))
+    } else {
+        None
+    };
+
+    Ok(crate::compute_tessellation(
+        &parsed.balls,
+        probe,
+        periodic_box,
+        grouping.as_deref(),
+        with_cell_vertices,
+    ))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -507,5 +645,29 @@ mod tests {
         ];
         let groups = build_residue_grouping(&records);
         assert_eq!(groups, vec![0, 0, 1, 2, 3]);
+    }
+
+    #[test]
+    fn file_compute_too_few_selections() {
+        let result = compute_tessellation_from_file(
+            Path::new("nonexistent.pdb"),
+            1.4,
+            None,
+            false,
+            Some(&["protein"]), // Only one selection - should fail
+        );
+        assert!(matches!(result, Err(FileComputeError::TooFewSelections)));
+    }
+
+    #[test]
+    fn file_compute_empty_selections() {
+        let result = compute_tessellation_from_file(
+            Path::new("nonexistent.pdb"),
+            1.4,
+            None,
+            false,
+            Some(&[]), // Empty selections - should fail
+        );
+        assert!(matches!(result, Err(FileComputeError::TooFewSelections)));
     }
 }
