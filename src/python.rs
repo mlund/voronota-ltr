@@ -13,8 +13,8 @@ use std::path::Path;
 use crate::input::compute_tessellation_from_file as compute_from_file_rs;
 use crate::{Ball, PeriodicBox, Results, compute_tessellation as compute_tessellation_rs};
 
-/// Extract a required key from a Python dict.
-fn extract_key<'py, T: FromPyObject<'py>>(dict: &Bound<'py, PyDict>, key: &str) -> PyResult<T> {
+/// Extract a required f64 key from a Python dict.
+fn extract_f64(dict: &Bound<'_, PyDict>, key: &str) -> PyResult<f64> {
     dict.get_item(key)?
         .ok_or_else(|| pyo3::exceptions::PyKeyError::new_err(format!("missing '{key}'")))?
         .extract()
@@ -39,20 +39,20 @@ fn ball_from_sequence(seq: &Bound<'_, PyAny>, type_name: &str) -> PyResult<Ball>
 /// Parse a single ball from tuple `(x, y, z, r)`, list `[x, y, z, r]`, or dict `{x, y, z, r}`.
 fn parse_single_ball(obj: &Bound<'_, PyAny>) -> PyResult<Ball> {
     // Dict checked first since it's the most explicit format
-    if let Ok(dict) = obj.downcast::<PyDict>() {
+    if let Ok(dict) = obj.cast::<PyDict>() {
         return Ok(Ball::new(
-            extract_key(dict, "x")?,
-            extract_key(dict, "y")?,
-            extract_key(dict, "z")?,
-            extract_key(dict, "r")?,
+            extract_f64(dict, "x")?,
+            extract_f64(dict, "y")?,
+            extract_f64(dict, "z")?,
+            extract_f64(dict, "r")?,
         ));
     }
 
     // Tuple and list share the same indexing interface
-    if obj.downcast::<PyTuple>().is_ok() {
+    if obj.cast::<PyTuple>().is_ok() {
         return ball_from_sequence(obj, "tuple");
     }
-    if obj.downcast::<PyList>().is_ok() {
+    if obj.cast::<PyList>().is_ok() {
         return ball_from_sequence(obj, "list");
     }
 
@@ -80,13 +80,13 @@ fn parse_balls(obj: &Bound<'_, PyAny>) -> PyResult<Vec<Ball>> {
     }
 
     // Otherwise iterate as list
-    let list = obj.downcast::<PyList>()?;
+    let list = obj.cast::<PyList>()?;
     list.iter().map(|item| parse_single_ball(&item)).collect()
 }
 
 /// Parse periodic box from dict with either "corners" or "vectors" key.
 fn parse_periodic_box(obj: &Bound<'_, PyAny>) -> PyResult<PeriodicBox> {
-    let dict = obj.downcast::<PyDict>()?;
+    let dict = obj.cast::<PyDict>()?;
 
     // Option 1: {"corners": [(x1,y1,z1), (x2,y2,z2)]}
     if let Some(corners) = dict.get_item("corners")? {
@@ -245,7 +245,7 @@ fn compute_tessellation<'py>(
     let pbox = periodic_box.map(parse_periodic_box).transpose()?;
 
     // Release GIL during computation
-    let result = py.allow_threads(|| {
+    let result = py.detach(|| {
         compute_tessellation_rs(
             &balls,
             probe,
@@ -304,7 +304,7 @@ fn compute_tessellation_from_file<'py>(
 
     // Release GIL during computation
     let result = py
-        .allow_threads(|| {
+        .detach(|| {
             compute_from_file_rs(
                 path,
                 probe,
