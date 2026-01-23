@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Kliment Olechnovic and Mikael Lund
+// Part of the voronota-ltr project, licensed under the MIT License.
+// SPDX-License-Identifier: MIT
+
 use std::f64::consts::TAU;
 
 #[cfg(test)]

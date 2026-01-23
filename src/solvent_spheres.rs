@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Kliment Olechnovic and Mikael Lund
+// Part of the voronota-ltr project, licensed under the MIT License.
+// SPDX-License-Identifier: MIT
+
 //! Generate weighted pseudo-solvent spheres around a molecule.
 
 use std::collections::HashSet;

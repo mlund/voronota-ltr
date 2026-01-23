@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Kliment Olechnovic and Mikael Lund
+// Part of the voronota-ltr project, licensed under the MIT License.
+// SPDX-License-Identifier: MIT
+
 //! Internal sphere state management for updateable tessellation.
 //!
 //! Manages sphere positions, periodic images, exclusion statuses, and collision detection.

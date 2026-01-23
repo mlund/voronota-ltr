@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Kliment Olechnovic and Mikael Lund
+// Part of the voronota-ltr project, licensed under the MIT License.
+// SPDX-License-Identifier: MIT
+
 use crate::geometry::{
     distance_to_intersection_circle_center, sphere_contains_sphere, sphere_equals_sphere,
     sphere_intersects_sphere,

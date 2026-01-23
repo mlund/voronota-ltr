@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Kliment Olechnovic and Mikael Lund
+// Part of the voronota-ltr project, licensed under the MIT License.
+// SPDX-License-Identifier: MIT
+
 //! Subdivided icosahedron for uniform sphere surface sampling.
 
 use nalgebra::{Point3, Vector3};

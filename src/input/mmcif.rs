@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Kliment Olechnovic and Mikael Lund
+// Part of the voronota-ltr project, licensed under the MIT License.
+// SPDX-License-Identifier: MIT
+
 //! mmCIF file format parser.
 //!
 //! Parses `_atom_site` loop blocks from mmCIF files with filtering for hydrogens, heteroatoms, and altLoc.
