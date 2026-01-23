@@ -20,7 +20,7 @@
 //!     Ball::new(1.5, 2.5, 0.0, 1.5),
 //! ];
 //!
-//! let result = compute_tessellation(&balls, 1.4, None, None);
+//! let result = compute_tessellation(&balls, 1.4, None, None, false);
 //!
 //! // Per-ball SAS areas and volumes (indexed by ball)
 //! let sas_areas: Vec<f64> = result.sas_areas();
@@ -48,5 +48,7 @@ mod updateable;
 pub use solvent_spheres::{SolventSphere, SolventSpheresError, compute_solvent_spheres};
 pub use subdivided_icosahedron::SubdivisionDepth;
 pub use tessellation::compute_tessellation;
-pub use types::{Ball, Cell, Contact, PeriodicBox, Results, TessellationResult};
+pub use types::{
+    Ball, Cell, CellEdge, CellVertex, Contact, PeriodicBox, Results, TessellationResult,
+};
 pub use updateable::{UpdateableResult, UpdateableTessellation};

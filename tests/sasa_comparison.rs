@@ -56,7 +56,7 @@ fn test_sasa_comparison_with_rust_sasa() {
         .collect();
 
     // Calculate SASA with voronota-ltr
-    let voronota_result = compute_tessellation(&balls, probe, None, None);
+    let voronota_result = compute_tessellation(&balls, probe, None, None, false);
     let voronota_sas = voronota_result.sas_areas();
 
     // Compare results

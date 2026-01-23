@@ -367,6 +367,8 @@ impl UpdateableTessellation {
             num_balls: n,
             contacts,
             cells,
+            cell_vertices: None,
+            cell_edges: None,
         }
     }
 

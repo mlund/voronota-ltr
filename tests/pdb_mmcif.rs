@@ -31,7 +31,7 @@ fn pdb_1ctf_contacts() {
     let radii = RadiiLookup::new();
     let balls = parse_file(&path, &options, &radii).expect("Failed to parse PDB file");
 
-    let result = compute_tessellation(&balls, 1.4, None, None);
+    let result = compute_tessellation(&balls, 1.4, None, None, false);
 
     assert_eq!(result.contacts.len(), 3078, "Expected 3078 contacts");
     assert_eq!(result.cells.len(), 492, "Expected 492 cells");
@@ -69,7 +69,7 @@ fn mmcif_1ctf_contacts() {
     let radii = RadiiLookup::new();
     let balls = parse_file(&path, &options, &radii).expect("Failed to parse mmCIF file");
 
-    let result = compute_tessellation(&balls, 1.4, None, None);
+    let result = compute_tessellation(&balls, 1.4, None, None, false);
 
     assert_eq!(result.cells.len(), 984, "Expected 984 cells");
     assert_eq!(result.contacts.len(), 6354, "Expected 6354 contacts");
@@ -163,7 +163,7 @@ fn pdb_1ctf_per_atom_comparison() {
     let options = ParseOptions::default();
     let radii = RadiiLookup::new();
     let balls = parse_file(&pdb_path, &options, &radii).expect("Failed to parse PDB file");
-    let result = compute_tessellation(&balls, 1.4, None, None);
+    let result = compute_tessellation(&balls, 1.4, None, None, false);
 
     // Load reference data
     let reference = parse_reference_cells(&ref_path);
@@ -235,7 +235,7 @@ fn custom_radii_file() {
     };
     let balls = parse_file(&pdb_path, &options, &radii).expect("Failed to parse PDB file");
 
-    let result = compute_tessellation(&balls, 1.4, None, None);
+    let result = compute_tessellation(&balls, 1.4, None, None, false);
 
     // C++ reference values from contacts_1ctf_pdb_as_assembly_with_heteroatoms_using_custom_radii_summary.txt
     assert_eq!(balls.len(), 984, "Expected 984 balls");
@@ -262,7 +262,7 @@ fn inter_chain_contacts_only() {
         parse_file_with_records(&cif_path, &options, &radii).expect("Failed to parse mmCIF file");
 
     let grouping = build_chain_grouping(&parsed.records);
-    let result = compute_tessellation(&parsed.balls, 1.4, None, Some(&grouping));
+    let result = compute_tessellation(&parsed.balls, 1.4, None, Some(&grouping), false);
 
     // C++ reference: contacts_1ctf_mmcif_assembly_inter_chain_mesh_summary.txt
     assert_eq!(parsed.balls.len(), 974, "Expected 974 balls");
@@ -289,7 +289,7 @@ fn inter_residue_contacts_only() {
         parse_file_with_records(&pdb_path, &options, &radii).expect("Failed to parse PDB file");
 
     let grouping = build_residue_grouping(&parsed.records);
-    let result = compute_tessellation(&parsed.balls, 1.4, None, Some(&grouping));
+    let result = compute_tessellation(&parsed.balls, 1.4, None, Some(&grouping), false);
 
     // C++ reference: voronota-lt -i assembly_1ctf.pdb1 --compute-only-inter-residue-contacts
     assert_eq!(parsed.balls.len(), 492, "Expected 492 balls");

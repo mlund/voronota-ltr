@@ -145,7 +145,7 @@ pub fn compute_solvent_spheres(
     }
 
     // Stage 1: tessellate to find contacts and exposed surfaces
-    let stage1_result = compute_tessellation(balls, probe, None, None);
+    let stage1_result = compute_tessellation(balls, probe, None, None, false);
     let neighbors = build_neighbor_graph(balls, &stage1_result);
 
     // Generate pseudo-solvent spheres by sampling exposed surfaces
@@ -316,7 +316,7 @@ fn compute_solvent_weights(
         ));
     }
 
-    let stage2_result = compute_tessellation(&combined, 0.0, None, None);
+    let stage2_result = compute_tessellation(&combined, 0.0, None, None, false);
 
     // Map cell index to volume for O(1) lookup
     let cell_volumes: std::collections::HashMap<usize, f64> = stage2_result

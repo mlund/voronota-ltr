@@ -239,6 +239,7 @@ fn main() -> io::Result<()> {
         cli.probe,
         periodic_box.as_ref(),
         grouping.as_deref(),
+        false,
     );
     let elapsed = start.elapsed();
 

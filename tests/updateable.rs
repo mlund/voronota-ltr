@@ -86,7 +86,7 @@ fn verify_updateable_matches_full(
         );
 
         // Compute full tessellation for comparison
-        let full = compute_tessellation(&balls, probe, pbox, None);
+        let full = compute_tessellation(&balls, probe, pbox, None, false);
         let incr = tess.summary();
 
         // Compare results
@@ -140,7 +140,7 @@ fn updateable_ring_periodic_cpp_port() {
     assert!(tess.init(&balls, probe, Some(&pbox)));
 
     // Verify initial state matches compute_tessellation
-    let full_init = compute_tessellation(&balls, probe, Some(&pbox), None);
+    let full_init = compute_tessellation(&balls, probe, Some(&pbox), None, false);
     let up_init = tess.summary();
 
     assert_eq!(up_init.contacts.len(), full_init.contacts.len());
@@ -159,7 +159,7 @@ fn updateable_ring_periodic_cpp_port() {
         assert!(tess.update_with_changed(&balls, &changed_ids));
 
         // Compare with full recompute
-        let full = compute_tessellation(&balls, probe, Some(&pbox), None);
+        let full = compute_tessellation(&balls, probe, Some(&pbox), None, false);
         let up = tess.summary();
 
         assert_eq!(up.contacts.len(), full.contacts.len());
@@ -313,7 +313,7 @@ fn updateable_balls_2zsk() {
     assert!(!tess.last_update_was_full_reinit());
 
     // Compare with full
-    let full = compute_tessellation(&balls, probe, None, None);
+    let full = compute_tessellation(&balls, probe, None, None, false);
     let incr = tess.summary();
 
     assert_eq!(incr.contacts.len(), full.contacts.len());

@@ -87,6 +87,53 @@ pub struct Cell {
     pub volume: f64,
 }
 
+/// Sentinel value representing "no sphere" in tessellation vertex indices.
+pub const NULL_ID: usize = usize::MAX;
+
+/// A vertex in the tessellation network.
+///
+/// Each vertex is defined by up to 4 spheres that meet at that point.
+/// If `ball_indices[3] == None`, the vertex lies on the solvent-accessible surface (SAS).
+#[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct CellVertex {
+    /// Indices of the (up to 4) balls defining this vertex. `None` indicates SAS boundary.
+    pub ball_indices: [Option<usize>; 4],
+    /// 3D position of the vertex.
+    pub x: f64,
+    pub y: f64,
+    pub z: f64,
+}
+
+impl CellVertex {
+    /// Returns true if this vertex lies on the solvent-accessible surface.
+    #[must_use]
+    pub const fn is_on_sas(&self) -> bool {
+        self.ball_indices[3].is_none()
+    }
+}
+
+/// An edge in the tessellation network.
+///
+/// Each edge is defined by 3 spheres (contact edge between two Voronoi cells).
+/// If `ball_indices[2] == None`, the edge lies on the solvent-accessible surface.
+#[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct CellEdge {
+    /// Indices of the 3 balls defining this edge. `None` indicates SAS boundary.
+    pub ball_indices: [Option<usize>; 3],
+    /// Length of the edge.
+    pub length: f64,
+}
+
+impl CellEdge {
+    /// Returns true if this edge lies on the solvent-accessible surface.
+    #[must_use]
+    pub const fn is_on_sas(&self) -> bool {
+        self.ball_indices[2].is_none()
+    }
+}
+
 /// Sorted collision pair: distance to intersection circle center + sphere index.
 #[derive(Debug, Clone, Copy)]
 pub struct ValuedId {
@@ -195,6 +242,10 @@ pub struct TessellationResult {
     pub contacts: Vec<Contact>,
     /// Voronoi cell properties for each sphere.
     pub cells: Vec<Cell>,
+    /// Tessellation vertices (optional, enabled via `with_cell_vertices`).
+    pub cell_vertices: Option<Vec<CellVertex>>,
+    /// Tessellation edges (optional, enabled via `with_cell_vertices`).
+    pub cell_edges: Option<Vec<CellEdge>>,
 }
 
 impl Results for TessellationResult {
@@ -378,6 +429,137 @@ pub struct CellContactSummary {
     pub count: usize,
     /// Processing stage.
     pub stage: CellStage,
+}
+
+/// Internal tessellation vertex representation (uses `NULL_ID` sentinel).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TessellationVertex {
+    /// Four sphere indices defining this vertex. `NULL_ID` means "on SAS".
+    pub ids: [usize; 4],
+    /// Position encoded as [x, y, z] for sorting stability.
+    pub pos: [u64; 3],
+}
+
+impl TessellationVertex {
+    /// Create from sphere IDs and position.
+    pub fn new(ids: [usize; 4], pos: nalgebra::Point3<f64>) -> Self {
+        let mut v = Self {
+            ids,
+            pos: [pos.x.to_bits(), pos.y.to_bits(), pos.z.to_bits()],
+        };
+        v.sort_ids();
+        v
+    }
+
+    /// Sort sphere IDs for canonical ordering (enables deduplication).
+    const fn sort_ids(&mut self) {
+        // 4-element sorting network
+        if self.ids[0] > self.ids[1] {
+            (self.ids[0], self.ids[1]) = (self.ids[1], self.ids[0]);
+        }
+        if self.ids[2] > self.ids[3] {
+            (self.ids[2], self.ids[3]) = (self.ids[3], self.ids[2]);
+        }
+        if self.ids[0] > self.ids[2] {
+            (self.ids[0], self.ids[2]) = (self.ids[2], self.ids[0]);
+        }
+        if self.ids[1] > self.ids[3] {
+            (self.ids[1], self.ids[3]) = (self.ids[3], self.ids[1]);
+        }
+        if self.ids[1] > self.ids[2] {
+            (self.ids[1], self.ids[2]) = (self.ids[2], self.ids[1]);
+        }
+    }
+
+    /// Convert to user-facing `CellVertex`.
+    #[must_use]
+    pub fn to_cell_vertex(self) -> CellVertex {
+        let id_to_opt = |id: usize| if id == NULL_ID { None } else { Some(id) };
+        CellVertex {
+            ball_indices: [
+                id_to_opt(self.ids[0]),
+                id_to_opt(self.ids[1]),
+                id_to_opt(self.ids[2]),
+                id_to_opt(self.ids[3]),
+            ],
+            x: f64::from_bits(self.pos[0]),
+            y: f64::from_bits(self.pos[1]),
+            z: f64::from_bits(self.pos[2]),
+        }
+    }
+}
+
+impl Ord for TessellationVertex {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.ids.cmp(&other.ids)
+    }
+}
+
+impl PartialOrd for TessellationVertex {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+/// Internal tessellation edge representation.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct TessellationEdge {
+    /// Three sphere indices defining this edge. `NULL_ID` means "on SAS".
+    pub ids: [usize; 3],
+    /// Edge length.
+    pub length: f64,
+}
+
+impl TessellationEdge {
+    /// Create from sphere IDs and length.
+    pub const fn new(ids: [usize; 3], length: f64) -> Self {
+        let mut e = Self { ids, length };
+        e.sort_ids();
+        e
+    }
+
+    /// Sort sphere IDs for canonical ordering.
+    const fn sort_ids(&mut self) {
+        // 3-element sorting network
+        if self.ids[0] > self.ids[1] {
+            (self.ids[0], self.ids[1]) = (self.ids[1], self.ids[0]);
+        }
+        if self.ids[1] > self.ids[2] {
+            (self.ids[1], self.ids[2]) = (self.ids[2], self.ids[1]);
+        }
+        if self.ids[0] > self.ids[1] {
+            (self.ids[0], self.ids[1]) = (self.ids[1], self.ids[0]);
+        }
+    }
+
+    /// Convert to user-facing `CellEdge`.
+    #[must_use]
+    pub fn to_cell_edge(self) -> CellEdge {
+        let id_to_opt = |id: usize| if id == NULL_ID { None } else { Some(id) };
+        CellEdge {
+            ball_indices: [
+                id_to_opt(self.ids[0]),
+                id_to_opt(self.ids[1]),
+                id_to_opt(self.ids[2]),
+            ],
+            length: self.length,
+        }
+    }
+}
+
+// Manual impl because f64 doesn't implement Eq (NaN != NaN), but we need Eq for Ord.
+impl Eq for TessellationEdge {}
+
+impl Ord for TessellationEdge {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.ids.cmp(&other.ids)
+    }
+}
+
+impl PartialOrd for TessellationEdge {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
 }
 
 impl CellContactSummary {

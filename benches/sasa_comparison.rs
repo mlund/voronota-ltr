@@ -61,8 +61,13 @@ macro_rules! bench_both {
             $group.bench_function("voronota", |b| {
                 b.iter(|| {
                     pool.install(|| {
-                        let result =
-                            compute_tessellation(black_box($balls), black_box($probe), None, None);
+                        let result = compute_tessellation(
+                            black_box($balls),
+                            black_box($probe),
+                            None,
+                            None,
+                            false,
+                        );
                         black_box(result.total_sas_area())
                     })
                 });
@@ -70,8 +75,13 @@ macro_rules! bench_both {
         } else {
             $group.bench_function("voronota", |b| {
                 b.iter(|| {
-                    let result =
-                        compute_tessellation(black_box($balls), black_box($probe), None, None);
+                    let result = compute_tessellation(
+                        black_box($balls),
+                        black_box($probe),
+                        None,
+                        None,
+                        false,
+                    );
                     black_box(result.total_sas_area())
                 });
             });

@@ -13,7 +13,9 @@ use crate::geometry::{
     rotate_point_around_axis, signed_distance_to_plane_unit, sphere_contains_sphere,
     sphere_intersects_sphere, triangle_area,
 };
-use crate::types::{ContactDescriptorSummary, Sphere, ValuedId};
+use crate::types::{
+    ContactDescriptorSummary, NULL_ID, Sphere, TessellationEdge, TessellationVertex, ValuedId,
+};
 
 /// A point on the contact contour
 #[derive(Debug, Clone)]
@@ -70,6 +72,69 @@ impl ContactDescriptor {
             id_a: self.id_a,
             id_b: self.id_b,
         }
+    }
+
+    /// Generate tessellation vertices and edges from this contact descriptor.
+    ///
+    /// Returns `(edges, vertices)`. For contacts with no contour (full circle),
+    /// only a single edge is produced with no vertices.
+    pub fn to_tessellation_elements(&self) -> (Vec<TessellationEdge>, Vec<TessellationVertex>) {
+        if self.area <= 0.0 {
+            return (Vec::new(), Vec::new());
+        }
+
+        if self.contour.is_empty() {
+            // No contour means uncut contact: a full circle on the SAS boundary
+            let edge = TessellationEdge::new(
+                [self.id_a, self.id_b, NULL_ID],
+                self.sum_of_arc_angles * self.intersection_circle.r,
+            );
+            return (vec![edge], Vec::new());
+        }
+
+        let mut edges = Vec::with_capacity(self.contour.len());
+        let mut vertices = Vec::with_capacity(self.contour.len());
+
+        for (i, cp) in self.contour.iter().enumerate() {
+            let next = &self.contour[(i + 1) % self.contour.len()];
+
+            // right_id == id_a means this segment lies on the SAS (arc length),
+            // otherwise it's a straight edge cut by a third sphere (Euclidean distance)
+            let length = if cp.right_id == self.id_a {
+                cp.angle * self.intersection_circle.r
+            } else {
+                (cp.p - next.p).norm()
+            };
+
+            // NULL_ID marks SAS boundary; otherwise the third sphere's ID
+            let edge_third = if cp.right_id == self.id_a {
+                NULL_ID
+            } else {
+                cp.right_id
+            };
+            edges.push(TessellationEdge::new(
+                [self.id_a, self.id_b, edge_third],
+                length,
+            ));
+
+            // Vertex defined by up to 4 spheres meeting at a point
+            let v_third = if cp.left_id == self.id_a {
+                NULL_ID
+            } else {
+                cp.left_id
+            };
+            let v_fourth = if cp.right_id == self.id_a {
+                NULL_ID
+            } else {
+                cp.right_id
+            };
+            vertices.push(TessellationVertex::new(
+                [self.id_a, self.id_b, v_third, v_fourth],
+                cp.p,
+            ));
+        }
+
+        (edges, vertices)
     }
 }
 

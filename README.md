@@ -39,7 +39,7 @@ let balls = vec![
     Ball::new(1.5, 2.5, 0.0, 1.5),
 ];
 
-let result = compute_tessellation(&balls, 1.4, None, None);
+let result = compute_tessellation(&balls, 1.4, None, None, false);
 
 // Per-ball SAS areas and volumes (indexed by ball)
 let sas_areas: Vec<f64> = result.sas_areas();
@@ -62,7 +62,7 @@ use voronota_ltr::{Ball, PeriodicBox, compute_tessellation};
 let balls = vec![Ball::new(0.0, 0.0, 0.0, 1.5)];
 let pbox = PeriodicBox::from_corners((0.0, 0.0, 0.0), (10.0, 10.0, 10.0));
 
-let result = compute_tessellation(&balls, 1.4, Some(&pbox), None);
+let result = compute_tessellation(&balls, 1.4, Some(&pbox), None, false);
 ```
 
 ### Updateable tessellation

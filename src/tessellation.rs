@@ -7,8 +7,9 @@ use rayon::prelude::*;
 use crate::contact::construct_contact_descriptor;
 use crate::spheres_searcher::SpheresSearcher;
 use crate::types::{
-    Ball, Cell, CellContactSummary, CellStage, Contact, ContactDescriptorSummary, PeriodicBox,
-    Sphere, TessellationResult, ValuedId,
+    Ball, Cell, CellContactSummary, CellEdge, CellStage, CellVertex, Contact,
+    ContactDescriptorSummary, PeriodicBox, Sphere, TessellationEdge, TessellationResult,
+    TessellationVertex, ValuedId,
 };
 
 /// Compute radical tessellation contacts and cells.
@@ -18,6 +19,7 @@ use crate::types::{
 /// * `probe` - Probe radius added to each ball
 /// * `periodic_box` - Optional periodic boundary box
 /// * `groups` - Optional group IDs; contacts between same-group spheres are excluded
+/// * `with_cell_vertices` - If true, compute cell vertices and edges (tessellation network)
 ///
 /// # Example
 /// ```
@@ -27,7 +29,7 @@ use crate::types::{
 ///     Ball::new(0.0, 0.0, 0.0, 1.5),
 ///     Ball::new(3.0, 0.0, 0.0, 1.5),
 /// ];
-/// let result = compute_tessellation(&balls, 1.4, None, None);
+/// let result = compute_tessellation(&balls, 1.4, None, None, false);
 /// ```
 #[must_use]
 #[allow(clippy::option_if_let_else)]
@@ -36,16 +38,29 @@ pub fn compute_tessellation(
     probe: f64,
     periodic_box: Option<&PeriodicBox>,
     groups: Option<&[i32]>,
+    with_cell_vertices: bool,
 ) -> TessellationResult {
     match periodic_box {
-        Some(pbox) => compute_periodic(balls, probe, pbox, groups),
-        None => compute_standard(balls, probe, groups),
+        Some(pbox) => compute_periodic(balls, probe, pbox, groups, with_cell_vertices),
+        None => compute_standard(balls, probe, groups, with_cell_vertices),
     }
+}
+
+/// Contact descriptor with optional tessellation elements.
+struct ContactWithTessellation {
+    summary: ContactDescriptorSummary,
+    edges: Vec<TessellationEdge>,
+    vertices: Vec<TessellationVertex>,
 }
 
 /// Standard (non-periodic) tessellation.
 /// Uses spatial grid to find neighbors, then computes contacts in parallel.
-fn compute_standard(balls: &[Ball], probe: f64, groups: Option<&[i32]>) -> TessellationResult {
+fn compute_standard(
+    balls: &[Ball],
+    probe: f64,
+    groups: Option<&[i32]>,
+    with_cell_vertices: bool,
+) -> TessellationResult {
     if balls.is_empty() {
         return TessellationResult::default();
     }
@@ -61,7 +76,7 @@ fn compute_standard(balls: &[Ball], probe: f64, groups: Option<&[i32]>) -> Tesse
 
     let collision_pairs = collect_collision_pairs(&all_collisions, groups, None);
 
-    let contact_summaries: Vec<Option<ContactDescriptorSummary>> = collision_pairs
+    let contact_results: Vec<Option<ContactWithTessellation>> = collision_pairs
         .par_iter()
         .map(|&(a_id, b_id)| {
             let cd = construct_contact_descriptor(
@@ -72,32 +87,54 @@ fn compute_standard(balls: &[Ball], probe: f64, groups: Option<&[i32]>) -> Tesse
             )?;
             let mut summary = cd.to_summary();
             summary.ensure_ids_ordered();
-            Some(summary)
+
+            let (edges, vertices) = if with_cell_vertices {
+                cd.to_tessellation_elements()
+            } else {
+                (Vec::new(), Vec::new())
+            };
+
+            Some(ContactWithTessellation {
+                summary,
+                edges,
+                vertices,
+            })
         })
         .collect();
 
-    let valid_summaries: Vec<ContactDescriptorSummary> = contact_summaries
+    let valid_results: Vec<ContactWithTessellation> = contact_results
         .into_iter()
         .flatten()
-        .filter(|s| s.area > 0.0)
+        .filter(|r| r.summary.area > 0.0)
         .collect();
 
-    let contacts: Vec<Contact> = valid_summaries
+    let contacts: Vec<Contact> = valid_results
         .iter()
-        .map(|s| Contact {
-            id_a: s.id_a,
-            id_b: s.id_b,
-            area: s.area,
-            arc_length: s.arc_length,
+        .map(|r| Contact {
+            id_a: r.summary.id_a,
+            id_b: r.summary.id_b,
+            area: r.summary.area,
+            arc_length: r.summary.arc_length,
         })
         .collect();
 
+    let valid_summaries: Vec<ContactDescriptorSummary> =
+        valid_results.iter().map(|r| r.summary.clone()).collect();
+
     let cells = compute_cells(&valid_summaries, searcher.spheres(), &all_collisions, None);
+
+    let (cell_vertices, cell_edges) = if with_cell_vertices {
+        assemble_tessellation_network(&valid_results, None)
+    } else {
+        (None, None)
+    };
 
     TessellationResult {
         num_balls: balls.len(),
         contacts,
         cells,
+        cell_vertices,
+        cell_edges,
     }
 }
 
@@ -137,6 +174,79 @@ fn same_group(groups: Option<&[i32]>, a: usize, b: usize) -> bool {
     }
 }
 
+/// Assemble deduplicated tessellation network from contact results.
+///
+/// For periodic systems, pass `Some(n)` to canonicalize image IDs back to
+/// original sphere indices (mod n), enabling proper deduplication.
+fn assemble_tessellation_network(
+    results: &[ContactWithTessellation],
+    periodic_n: Option<usize>,
+) -> (Option<Vec<CellVertex>>, Option<Vec<CellEdge>>) {
+    use crate::types::NULL_ID;
+
+    // For periodic: map image IDs back to original (mod n); preserve NULL_ID
+    let canonicalize = |id: usize| match periodic_n {
+        Some(n) if id != NULL_ID => id % n,
+        _ => id,
+    };
+
+    let mut all_edges: Vec<TessellationEdge> = results
+        .iter()
+        .flat_map(|r| r.edges.iter())
+        .map(|e| {
+            TessellationEdge::new(
+                [
+                    canonicalize(e.ids[0]),
+                    canonicalize(e.ids[1]),
+                    canonicalize(e.ids[2]),
+                ],
+                e.length,
+            )
+        })
+        .collect();
+
+    let mut all_vertices: Vec<TessellationVertex> = results
+        .iter()
+        .flat_map(|r| r.vertices.iter())
+        .map(|v| {
+            let pos = nalgebra::Point3::new(
+                f64::from_bits(v.pos[0]),
+                f64::from_bits(v.pos[1]),
+                f64::from_bits(v.pos[2]),
+            );
+            TessellationVertex::new(
+                [
+                    canonicalize(v.ids[0]),
+                    canonicalize(v.ids[1]),
+                    canonicalize(v.ids[2]),
+                    canonicalize(v.ids[3]),
+                ],
+                pos,
+            )
+        })
+        .collect();
+
+    // Sort + deduplicate: sorted IDs enable O(n) dedup via adjacent comparison
+    all_edges.sort_unstable();
+    all_vertices.sort_unstable();
+
+    let edges: Vec<CellEdge> = all_edges
+        .iter()
+        .enumerate()
+        .filter(|(i, e)| *i == 0 || e.ids != all_edges[i - 1].ids)
+        .map(|(_, e)| e.to_cell_edge())
+        .collect();
+
+    let vertices: Vec<CellVertex> = all_vertices
+        .iter()
+        .enumerate()
+        .filter(|(i, v)| *i == 0 || v.ids != all_vertices[i - 1].ids)
+        .map(|(_, v)| v.to_cell_vertex())
+        .collect();
+
+    (Some(vertices), Some(edges))
+}
+
 /// Periodic boundary tessellation.
 /// Creates 27 periodic images (3x3x3 grid) to handle boundary crossings,
 /// then deduplicates contacts that appear in multiple images.
@@ -145,6 +255,7 @@ fn compute_periodic(
     probe: f64,
     periodic_box: &PeriodicBox,
     groups: Option<&[i32]>,
+    with_cell_vertices: bool,
 ) -> TessellationResult {
     if balls.is_empty() {
         return TessellationResult::default();
@@ -171,7 +282,7 @@ fn compute_periodic(
     // Construct contact descriptors in parallel
     // Keep ORIGINAL IDs in summary - do NOT canonicalize until after deduplication
     // This matches C++ behavior where ensure_ids_ordered() just orders, not canonicalizes
-    let contact_summaries: Vec<Option<ContactDescriptorSummary>> = collision_pairs
+    let contact_results: Vec<Option<ContactWithTessellation>> = collision_pairs
         .par_iter()
         .map(|&(a_id, b_id)| {
             let cd = construct_contact_descriptor(
@@ -185,15 +296,31 @@ fn compute_periodic(
             summary.id_a = a_id;
             summary.id_b = b_id;
             summary.ensure_ids_ordered();
-            Some(summary)
+
+            let (edges, vertices) = if with_cell_vertices {
+                cd.to_tessellation_elements()
+            } else {
+                (Vec::new(), Vec::new())
+            };
+
+            Some(ContactWithTessellation {
+                summary,
+                edges,
+                vertices,
+            })
         })
         .collect();
 
     // Filter valid contacts
-    let all_valid_summaries: Vec<ContactDescriptorSummary> = contact_summaries
+    let all_valid_results: Vec<ContactWithTessellation> = contact_results
         .into_iter()
         .flatten()
-        .filter(|s| s.area > 0.0)
+        .filter(|r| r.summary.area > 0.0)
+        .collect();
+
+    let all_valid_summaries: Vec<ContactDescriptorSummary> = all_valid_results
+        .iter()
+        .map(|r| r.summary.clone())
         .collect();
 
     // Compute cells using ALL contacts (including boundary duplicates)
@@ -204,6 +331,13 @@ fn compute_periodic(
         &all_collisions,
         Some(n),
     );
+
+    // Assemble tessellation network with canonical IDs for deduplication
+    let (cell_vertices, cell_edges) = if with_cell_vertices {
+        assemble_tessellation_network(&all_valid_results, Some(n))
+    } else {
+        (None, None)
+    };
 
     // Deduplicate boundary contacts for output (takes ownership, avoids clone)
     let deduped_summaries = deduplicate_periodic_contacts(all_valid_summaries, n);
@@ -223,6 +357,8 @@ fn compute_periodic(
         num_balls: n,
         contacts,
         cells,
+        cell_vertices,
+        cell_edges,
     }
 }
 
@@ -365,6 +501,7 @@ fn compute_cells(
 }
 
 #[cfg(test)]
+#[allow(clippy::approx_constant)]
 mod tests {
     use super::*;
     use approx::assert_relative_eq;
@@ -373,7 +510,7 @@ mod tests {
     fn test_two_spheres() {
         let balls = vec![Ball::new(0.0, 0.0, 0.0, 1.0), Ball::new(2.0, 0.0, 0.0, 1.0)];
 
-        let result = compute_tessellation(&balls, 0.5, None, None);
+        let result = compute_tessellation(&balls, 0.5, None, None, false);
 
         assert_eq!(result.contacts.len(), 1);
         assert!(result.contacts[0].area > 0.0);
@@ -388,7 +525,7 @@ mod tests {
     fn test_single_sphere() {
         let balls = vec![Ball::new(0.0, 0.0, 0.0, 1.0)];
 
-        let result = compute_tessellation(&balls, 0.5, None, None);
+        let result = compute_tessellation(&balls, 0.5, None, None, false);
 
         // No contacts for single sphere
         assert!(result.contacts.is_empty());
@@ -407,7 +544,7 @@ mod tests {
             Ball::new(1.0, 1.7, 0.0, 1.0),
         ];
 
-        let result = compute_tessellation(&balls, 0.5, None, None);
+        let result = compute_tessellation(&balls, 0.5, None, None, false);
 
         // Should have 3 contacts (each pair)
         assert_eq!(result.contacts.len(), 3);
@@ -423,7 +560,7 @@ mod tests {
             Ball::new(10.0, 0.0, 0.0, 1.0),
         ];
 
-        let result = compute_tessellation(&balls, 0.5, None, None);
+        let result = compute_tessellation(&balls, 0.5, None, None, false);
 
         // No contacts between well-separated spheres
         assert!(result.contacts.is_empty());
@@ -435,7 +572,7 @@ mod tests {
     #[test]
     fn test_empty_input() {
         let balls: Vec<Ball> = vec![];
-        let result = compute_tessellation(&balls, 0.5, None, None);
+        let result = compute_tessellation(&balls, 0.5, None, None, false);
 
         assert!(result.contacts.is_empty());
         assert!(result.cells.is_empty());
@@ -466,7 +603,7 @@ mod tests {
             Ball::new(-0.382683, 0.92388, 0.0, 0.5),
         ];
 
-        let result = compute_tessellation(&balls, 1.0, None, None);
+        let result = compute_tessellation(&balls, 1.0, None, None, false);
 
         // C++ produces 44 contacts in basic mode
         assert_eq!(result.contacts.len(), 44);
@@ -527,7 +664,7 @@ mod tests {
             Ball::new(1.0, 0.0, 0.0, 1.0),
         ];
 
-        let result = compute_tessellation(&balls, 1.0, None, None);
+        let result = compute_tessellation(&balls, 1.0, None, None, false);
 
         // Middle ball (1) should contact both end balls
         assert_eq!(result.cells.len(), 3);
@@ -544,7 +681,7 @@ mod tests {
             Ball::new(0.0, 1.0, 1.0, 1.0),
         ];
 
-        let result = compute_tessellation(&balls, 2.0, None, None);
+        let result = compute_tessellation(&balls, 2.0, None, None, false);
 
         assert_eq!(result.cells.len(), 4);
         // Each ball contacts its neighbors
@@ -565,7 +702,7 @@ mod tests {
             Ball::new(1.0, 1.0, 1.0, 1.0),
         ];
 
-        let result = compute_tessellation(&balls, 2.0, None, None);
+        let result = compute_tessellation(&balls, 2.0, None, None, false);
 
         assert_eq!(result.cells.len(), 8);
         assert!(!result.contacts.is_empty());
@@ -580,7 +717,7 @@ mod tests {
             Ball::new(1.0, 0.0, 0.0, 1.0),
         ];
 
-        let result = compute_tessellation(&balls, 0.5, None, None);
+        let result = compute_tessellation(&balls, 0.5, None, None, false);
 
         // Ball 1 is hidden inside ball 0 - should only have 2 cells
         // (hidden balls are excluded in C++ when discard_hidden=true)
@@ -695,7 +832,7 @@ mod tests {
             Ball::new(17.76, 27.17, 109.62, 3.0),
         ];
 
-        let result = compute_tessellation(&balls, 2.0, None, None);
+        let result = compute_tessellation(&balls, 2.0, None, None, false);
 
         // C++ expected: 153 contacts, 100 cells
         assert_approx!(result.contacts.len() as f64, 153.0, 1.0, "contact count");
@@ -748,7 +885,7 @@ mod tests {
         ];
 
         let pbox = PeriodicBox::from_corners((-1.6, -1.6, -0.6), (1.6, 1.6, 3.1));
-        let result = compute_tessellation(&balls, 1.0, Some(&pbox), None);
+        let result = compute_tessellation(&balls, 1.0, Some(&pbox), None, false);
 
         // C++ produces 64 contacts in periodic mode (more than basic mode's 44)
         // (contacts include self-contacts through periodic boundaries)
@@ -889,7 +1026,7 @@ mod tests {
 
         // Periodic box: corners (0,0,0) to (200,250,300)
         let pbox = PeriodicBox::from_corners((0.0, 0.0, 0.0), (200.0, 250.0, 300.0));
-        let result = compute_tessellation(&balls, 2.0, Some(&pbox), None);
+        let result = compute_tessellation(&balls, 2.0, Some(&pbox), None, false);
 
         // C++ expected: 189 contacts (vs 153 non-periodic), 100 cells
         assert_approx!(
@@ -923,17 +1060,17 @@ mod tests {
         ];
 
         // Without grouping: 2 contacts (0-1 and 1-2)
-        let result_no_groups = compute_tessellation(&balls, 0.5, None, None);
+        let result_no_groups = compute_tessellation(&balls, 0.5, None, None, false);
         assert_eq!(result_no_groups.contacts.len(), 2);
 
         // All in same group: 0 contacts
         let groups_same = vec![0, 0, 0];
-        let result_same = compute_tessellation(&balls, 0.5, None, Some(&groups_same));
+        let result_same = compute_tessellation(&balls, 0.5, None, Some(&groups_same), false);
         assert_eq!(result_same.contacts.len(), 0);
 
         // 0 and 1 in group 0, 2 in group 1: only 1 contact (1-2)
         let groups_partial = vec![0, 0, 1];
-        let result_partial = compute_tessellation(&balls, 0.5, None, Some(&groups_partial));
+        let result_partial = compute_tessellation(&balls, 0.5, None, Some(&groups_partial), false);
         assert_eq!(result_partial.contacts.len(), 1);
         assert_eq!(result_partial.contacts[0].id_a, 1);
         assert_eq!(result_partial.contacts[0].id_b, 2);
@@ -953,12 +1090,12 @@ mod tests {
         let pbox = PeriodicBox::from_corners((-2.0, -2.0, -1.0), (2.0, 2.0, 4.0));
 
         // Without grouping
-        let result_no_groups = compute_tessellation(&balls, 1.0, Some(&pbox), None);
+        let result_no_groups = compute_tessellation(&balls, 1.0, Some(&pbox), None, false);
         let contacts_no_groups = result_no_groups.contacts.len();
 
         // All in same group: should have fewer/no contacts
         let groups_same = vec![0, 0, 0];
-        let result_same = compute_tessellation(&balls, 1.0, Some(&pbox), Some(&groups_same));
+        let result_same = compute_tessellation(&balls, 1.0, Some(&pbox), Some(&groups_same), false);
         assert!(
             result_same.contacts.len() < contacts_no_groups,
             "same group should reduce contacts"
@@ -977,7 +1114,7 @@ mod tests {
 
         // Groups: 0,0,1,1 - contacts only between groups (1-2)
         let groups = vec![0, 0, 1, 1];
-        let result = compute_tessellation(&balls, 0.5, None, Some(&groups));
+        let result = compute_tessellation(&balls, 0.5, None, Some(&groups), false);
 
         // Only contact between balls 1 and 2 (different groups, adjacent)
         assert_eq!(result.contacts.len(), 1);
@@ -986,5 +1123,233 @@ mod tests {
 
         // Cells are computed for spheres with contacts
         assert_eq!(result.cells.len(), 2);
+    }
+
+    /// Test cell vertices and edges generation
+    #[test]
+    fn test_cell_vertices_simple() {
+        let balls = vec![
+            Ball::new(0.0, 0.0, 0.0, 1.5),
+            Ball::new(3.0, 0.0, 0.0, 1.5),
+            Ball::new(1.5, 2.5, 0.0, 1.5),
+        ];
+
+        // Without cell vertices
+        let result_no_verts = compute_tessellation(&balls, 1.4, None, None, false);
+        assert!(result_no_verts.cell_vertices.is_none());
+        assert!(result_no_verts.cell_edges.is_none());
+
+        // With cell vertices
+        let result = compute_tessellation(&balls, 1.4, None, None, true);
+
+        assert!(result.cell_vertices.is_some());
+        assert!(result.cell_edges.is_some());
+
+        let vertices = result.cell_vertices.unwrap();
+        let edges = result.cell_edges.unwrap();
+
+        // Should have vertices and edges
+        assert!(!vertices.is_empty(), "should have vertices");
+        assert!(!edges.is_empty(), "should have edges");
+
+        // Each vertex should reference at least 2 balls (the contact pair)
+        for v in &vertices {
+            let defined_count = v.ball_indices.iter().filter(|i| i.is_some()).count();
+            assert!(
+                defined_count >= 2,
+                "vertex should reference at least 2 balls"
+            );
+        }
+
+        // Check SAS vertices exist (at least one ball_indices[3] is None)
+        let sas_vertices = vertices.iter().filter(|v| v.is_on_sas()).count();
+        assert!(
+            sas_vertices > 0,
+            "should have SAS vertices for open contacts"
+        );
+    }
+
+    /// Test cell vertices with full-circle contact (no contour cutting)
+    #[test]
+    fn test_cell_vertices_full_circle() {
+        let balls = vec![Ball::new(0.0, 0.0, 0.0, 1.5), Ball::new(2.5, 0.0, 0.0, 1.5)];
+
+        let result = compute_tessellation(&balls, 0.5, None, None, true);
+
+        let vertices = result.cell_vertices.unwrap();
+        let edges = result.cell_edges.unwrap();
+
+        // Full circle contact: single edge (SAS), no vertices
+        assert!(vertices.is_empty(), "full circle should have no vertices");
+        assert_eq!(edges.len(), 1, "full circle should have one edge");
+
+        // The edge should be on SAS (third ball index is None)
+        assert!(edges[0].is_on_sas(), "full circle edge should be on SAS");
+    }
+
+    /// Test cell vertices against C++ expected values (17-ball ring, basic mode)
+    /// C++ output: example_for_cell_vertices_basic_and_periodic_output.txt
+    #[test]
+    fn test_cell_vertices_cpp_basic() {
+        let balls = vec![
+            Ball::new(0.0, 0.0, 2.0, 1.0),
+            Ball::new(0.0, 1.0, 0.0, 0.5),
+            Ball::new(0.382683, 0.92388, 0.0, 0.5),
+            Ball::new(0.707107, 0.707107, 0.0, 0.5),
+            Ball::new(0.92388, 0.382683, 0.0, 0.5),
+            Ball::new(1.0, 0.0, 0.0, 0.5),
+            Ball::new(0.92388, -0.382683, 0.0, 0.5),
+            Ball::new(0.707107, -0.707107, 0.0, 0.5),
+            Ball::new(0.382683, -0.92388, 0.0, 0.5),
+            Ball::new(0.0, -1.0, 0.0, 0.5),
+            Ball::new(-0.382683, -0.92388, 0.0, 0.5),
+            Ball::new(-0.707107, -0.707107, 0.0, 0.5),
+            Ball::new(-0.92388, -0.382683, 0.0, 0.5),
+            Ball::new(-1.0, 0.0, 0.0, 0.5),
+            Ball::new(-0.92388, 0.382683, 0.0, 0.5),
+            Ball::new(-0.707107, 0.707107, 0.0, 0.5),
+            Ball::new(-0.382683, 0.92388, 0.0, 0.5),
+        ];
+
+        let result = compute_tessellation(&balls, 1.0, None, None, true);
+
+        let vertices = result.cell_vertices.unwrap();
+        let edges = result.cell_edges.unwrap();
+
+        // C++ produces 68 vertices in basic mode: 32 on_SAS, 36 not_on_SAS
+        assert_eq!(vertices.len(), 68, "C++ expects 68 vertices in basic mode");
+
+        let sas_vertices = vertices.iter().filter(|v| v.is_on_sas()).count();
+        let internal_vertices = vertices.len() - sas_vertices;
+
+        assert_eq!(sas_vertices, 32, "C++ expects 32 SAS vertices");
+        assert_eq!(internal_vertices, 36, "C++ expects 36 internal vertices");
+
+        // Edges should exist
+        assert!(!edges.is_empty(), "should have edges");
+    }
+
+    /// Test cell vertices for balls_cs_1x1 dataset against C++ expected values
+    /// C++ output: output_cs_1x1_full_tessellation_{vertices,edges}.txt
+    #[test]
+    fn test_cell_vertices_cpp_cs_1x1() {
+        let balls = vec![
+            Ball::new(46.99, 128.17, 144.94, 3.0),
+            Ball::new(46.79, 127.84, 138.22, 3.0),
+            Ball::new(40.46, 120.67, 136.9, 3.0),
+            Ball::new(35.1, 117.45, 140.94, 3.0),
+            Ball::new(33.86, 117.2, 148.43, 3.0),
+            Ball::new(39.4, 120.41, 149.01, 3.0),
+            Ball::new(36.71, 121.18, 154.2, 3.0),
+            Ball::new(32.12, 126.51, 155.65, 3.0),
+            Ball::new(34.67, 129.16, 149.57, 3.0),
+            Ball::new(32.34, 128.99, 144.2, 3.0),
+            Ball::new(33.09, 122.88, 145.41, 3.0),
+            Ball::new(30.0, 125.65, 139.02, 3.0),
+            Ball::new(27.62, 119.24, 141.44, 3.0),
+            Ball::new(25.13, 113.84, 137.18, 3.0),
+            Ball::new(29.87, 107.42, 137.46, 3.0),
+            Ball::new(26.02, 102.66, 133.78, 3.0),
+            Ball::new(20.71, 103.26, 138.04, 3.0),
+            Ball::new(18.33, 108.95, 133.72, 3.0),
+            Ball::new(18.21, 102.44, 131.67, 3.0),
+            Ball::new(12.27, 98.98, 136.42, 3.0),
+            Ball::new(7.17, 97.07, 142.18, 3.0),
+            Ball::new(12.75, 101.93, 142.09, 3.0),
+            Ball::new(10.25, 106.11, 136.61, 3.0),
+            Ball::new(5.13, 103.38, 137.34, 3.0),
+            Ball::new(2.81, 96.83, 136.53, 3.0),
+            Ball::new(199.58, 94.33, 130.99, 3.0),
+            Ball::new(196.28, 96.52, 137.27, 3.0),
+            Ball::new(192.59, 100.31, 143.44, 3.0),
+            Ball::new(190.67, 100.96, 150.68, 3.0),
+            Ball::new(187.5, 95.69, 150.38, 3.0),
+            Ball::new(182.33, 94.62, 144.59, 3.0),
+            Ball::new(184.33, 88.67, 146.43, 3.0),
+            Ball::new(189.07, 84.29, 143.8, 3.0),
+            Ball::new(191.45, 89.77, 148.42, 3.0),
+            Ball::new(194.86, 84.61, 150.8, 3.0),
+            Ball::new(1.45, 82.39, 152.66, 3.0),
+            Ball::new(5.04, 81.64, 147.34, 3.0),
+            Ball::new(5.47, 76.86, 142.69, 3.0),
+            Ball::new(5.16, 75.21, 135.9, 3.0),
+            Ball::new(199.99, 80.94, 137.51, 3.0),
+            Ball::new(1.41, 78.75, 129.18, 3.0),
+            Ball::new(8.21, 75.44, 128.81, 3.0),
+            Ball::new(8.35, 81.56, 130.25, 3.0),
+            Ball::new(6.65, 79.28, 122.15, 3.0),
+            Ball::new(4.8, 71.03, 125.18, 3.0),
+            Ball::new(10.12, 66.8, 123.83, 3.0),
+            Ball::new(8.48, 63.62, 116.35, 3.0),
+            Ball::new(6.2, 60.8, 125.01, 3.0),
+            Ball::new(3.29, 55.29, 131.1, 3.0),
+            Ball::new(195.59, 55.07, 133.32, 3.0),
+            Ball::new(195.35, 53.1, 126.58, 3.0),
+            Ball::new(2.39, 54.54, 123.83, 3.0),
+            Ball::new(2.73, 48.16, 128.91, 3.0),
+            Ball::new(6.94, 42.41, 130.5, 3.0),
+            Ball::new(11.86, 44.13, 133.14, 3.0),
+            Ball::new(18.09, 46.45, 135.96, 3.0),
+            Ball::new(15.24, 41.72, 140.16, 3.0),
+            Ball::new(7.03, 44.27, 143.93, 3.0),
+            Ball::new(0.12, 39.89, 144.4, 3.0),
+            Ball::new(196.82, 45.27, 145.55, 3.0),
+            Ball::new(198.29, 51.36, 147.62, 3.0),
+            Ball::new(195.38, 50.22, 152.79, 3.0),
+            Ball::new(199.71, 47.08, 157.01, 3.0),
+            Ball::new(198.69, 42.65, 162.43, 3.0),
+            Ball::new(4.21, 42.48, 157.17, 3.0),
+            Ball::new(198.77, 39.29, 154.66, 3.0),
+            Ball::new(193.94, 33.49, 153.14, 3.0),
+            Ball::new(193.53, 29.28, 146.87, 3.0),
+            Ball::new(197.71, 32.8, 139.77, 3.0),
+            Ball::new(2.12, 27.6, 139.4, 3.0),
+            Ball::new(8.25, 28.61, 143.92, 3.0),
+            Ball::new(5.23, 26.79, 150.75, 3.0),
+            Ball::new(2.36, 34.37, 148.67, 3.0),
+            Ball::new(0.18, 28.16, 146.85, 3.0),
+            Ball::new(0.99, 21.1, 144.55, 3.0),
+            Ball::new(197.14, 14.68, 142.83, 3.0),
+            Ball::new(4.28, 14.63, 143.32, 3.0),
+            Ball::new(4.17, 6.04, 141.11, 3.0),
+            Ball::new(198.55, 11.05, 136.27, 3.0),
+            Ball::new(1.65, 17.63, 135.27, 3.0),
+            Ball::new(8.11, 15.64, 136.87, 3.0),
+            Ball::new(8.84, 8.96, 132.77, 3.0),
+            Ball::new(2.32, 11.74, 131.32, 3.0),
+            Ball::new(195.68, 13.72, 128.38, 3.0),
+            Ball::new(194.42, 20.61, 128.43, 3.0),
+            Ball::new(0.37, 21.48, 124.8, 3.0),
+            Ball::new(198.77, 28.78, 122.78, 3.0),
+            Ball::new(199.57, 28.78, 130.48, 3.0),
+            Ball::new(192.44, 27.17, 134.05, 3.0),
+            Ball::new(187.1, 31.09, 131.26, 3.0),
+            Ball::new(188.94, 33.19, 123.15, 3.0),
+            Ball::new(191.64, 30.15, 116.89, 3.0),
+            Ball::new(188.64, 28.34, 110.09, 3.0),
+            Ball::new(193.72, 28.87, 105.23, 3.0),
+            Ball::new(197.0, 34.6, 106.19, 3.0),
+            Ball::new(199.2, 32.18, 114.74, 3.0),
+            Ball::new(2.24, 27.61, 111.68, 3.0),
+            Ball::new(8.22, 28.56, 114.86, 3.0),
+            Ball::new(10.95, 24.23, 111.08, 3.0),
+            Ball::new(17.76, 27.17, 109.62, 3.0),
+        ];
+
+        let result = compute_tessellation(&balls, 2.0, None, None, true);
+
+        let vertices = result.cell_vertices.unwrap();
+        let edges = result.cell_edges.unwrap();
+
+        // C++ produces 65 vertices and 215 edges for balls_cs_1x1 with probe=2.0
+        assert_eq!(vertices.len(), 65, "C++ expects 65 vertices");
+        assert_eq!(edges.len(), 215, "C++ expects 215 edges");
+
+        // Most vertices should be on SAS for this sparse structure
+        let sas_vertices = vertices.iter().filter(|v| v.is_on_sas()).count();
+        assert!(
+            sas_vertices > vertices.len() / 2,
+            "most vertices should be on SAS"
+        );
     }
 }
