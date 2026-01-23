@@ -101,8 +101,9 @@ impl GridParameters {
     }
 }
 
-/// Result of collision search
+/// Result of collision search for a single sphere.
 pub struct CollisionResult {
+    /// IDs and distances of spheres colliding with the query sphere.
     pub colliding_ids: Vec<ValuedId>,
     /// Whether this sphere is excluded (contained within another).
     pub excluded: bool,
@@ -119,6 +120,7 @@ pub struct SpheresSearcher {
 }
 
 impl SpheresSearcher {
+    /// Build spatial index from a collection of spheres.
     pub fn new(spheres: Vec<Sphere>) -> Self {
         let grid_params = GridParameters::new(&spheres);
         let mut searcher = Self {
@@ -131,6 +133,7 @@ impl SpheresSearcher {
         searcher
     }
 
+    /// Access the indexed spheres.
     pub fn spheres(&self) -> &[Sphere] {
         &self.spheres
     }

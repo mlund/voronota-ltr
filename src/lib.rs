@@ -2,6 +2,8 @@
 // Part of the voronota-ltr project, licensed under the MIT License.
 // SPDX-License-Identifier: MIT
 
+#![deny(missing_docs)]
+
 //! Native rust port of [voronota-lt](https://github.com/kliment-olechnovic/voronota/tree/master/expansion_lt)
 //! for computing radical tessellation contacts and cells.
 //!
@@ -34,21 +36,31 @@
 //! }
 //! ```
 
-mod contact;
-mod geometry;
+/// Contact descriptor construction and contour processing.
+pub mod contact;
+/// Geometric primitives and utility functions for sphere operations.
+pub mod geometry;
+/// PyMOL CGO graphics output for contact visualization.
+pub mod graphics;
+/// Input file parsing (PDB, mmCIF, XYZR formats).
 pub mod input;
 mod solvent_spheres;
 mod spheres_container;
-mod spheres_searcher;
+/// Spatial indexing for efficient sphere collision detection.
+pub mod spheres_searcher;
 mod subdivided_icosahedron;
 mod tessellation;
-mod types;
+/// Core data types for tessellation input and output.
+pub mod types;
 mod updateable;
 
+pub use contact::{ContactDescriptor, ContourState, construct_contact_descriptor};
+pub use graphics::{ContactGraphics, GraphicsWriter};
 pub use solvent_spheres::{SolventSphere, SolventSpheresError, compute_solvent_spheres};
 pub use subdivided_icosahedron::SubdivisionDepth;
 pub use tessellation::compute_tessellation;
 pub use types::{
-    Ball, Cell, CellEdge, CellVertex, Contact, PeriodicBox, Results, TessellationResult,
+    Ball, Cell, CellEdge, CellVertex, Contact, PeriodicBox, Results, Sphere, TessellationResult,
+    ValuedId,
 };
 pub use updateable::{UpdateableResult, UpdateableTessellation};

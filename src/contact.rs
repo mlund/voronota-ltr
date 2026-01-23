@@ -17,14 +17,33 @@ use crate::types::{
     ContactDescriptorSummary, NULL_ID, Sphere, TessellationEdge, TessellationVertex, ValuedId,
 };
 
-/// A point on the contact contour
+/// Processing state for contour points during clipping.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum ContourState {
+    /// Point is inside the cutting circle (kept)
+    #[default]
+    Inside,
+    /// Point is outside the cutting circle (removed after processing)
+    Outside,
+    /// Marks start of consecutive arc segment
+    ArcStart,
+    /// Marks continuation of arc segment
+    ArcContinue,
+}
+
+/// A point on the contact contour boundary.
 #[derive(Debug, Clone)]
-struct ContourPoint {
-    p: Point3<f64>,
-    angle: f64,
-    left_id: usize,
-    right_id: usize,
-    indicator: i32,
+pub struct ContourPoint {
+    /// 3D position of this contour vertex
+    pub p: Point3<f64>,
+    /// Arc angle to the next contour point (radians)
+    pub angle: f64,
+    /// Sphere ID on the left side of this edge
+    pub left_id: usize,
+    /// Sphere ID on the right side of this edge
+    pub right_id: usize,
+    /// Temporary state for contour clipping
+    pub state: ContourState,
 }
 
 impl ContourPoint {
@@ -34,32 +53,47 @@ impl ContourPoint {
             angle: 0.0,
             left_id,
             right_id,
-            indicator: 0,
+            state: ContourState::Inside,
         }
     }
 }
 
-type Contour = Vec<ContourPoint>;
+/// Ordered sequence of points forming a contact's boundary polygon.
+pub type Contour = Vec<ContourPoint>;
 
-/// Full contact descriptor (internal use)
+/// Full geometric descriptor for a contact between two spheres.
 #[derive(Debug, Clone, Default)]
 pub struct ContactDescriptor {
-    contour: Contour,
+    /// Boundary polygon vertices (empty if uncut full circle)
+    pub contour: Contour,
+    /// Circle where the two spheres intersect
     pub intersection_circle: Sphere,
+    /// Unit normal from sphere A toward sphere B
     pub axis: Vector3<f64>,
+    /// Centroid of the contact polygon
     pub contour_barycenter: Point3<f64>,
+    /// Total arc angle along SAS boundary edges
     pub sum_of_arc_angles: f64,
+    /// Contact surface area
     pub area: f64,
+    /// Solid angle subtended at sphere A center
     pub solid_angle_a: f64,
+    /// Solid angle subtended at sphere B center
     pub solid_angle_b: f64,
+    /// Pyramid volume contribution for sphere A
     pub pyramid_volume_a: f64,
+    /// Pyramid volume contribution for sphere B
     pub pyramid_volume_b: f64,
+    /// Center-to-center distance between spheres
     pub distance: f64,
+    /// Index of first sphere
     pub id_a: usize,
+    /// Index of second sphere
     pub id_b: usize,
 }
 
 impl ContactDescriptor {
+    /// Convert to a summary with computed arc length and cell contributions.
     pub fn to_summary(&self) -> ContactDescriptorSummary {
         ContactDescriptorSummary {
             area: self.area,
@@ -513,9 +547,9 @@ fn restrict_contour_to_circle(
     let mut outsiders = 0;
     for cp in contour.iter_mut() {
         if (cp.p - ic.center).norm_squared() <= ic.r * ic.r {
-            cp.indicator = 0;
+            cp.state = ContourState::Inside;
         } else {
-            cp.indicator = 1;
+            cp.state = ContourState::Outside;
             outsiders += 1;
         }
     }
@@ -529,11 +563,11 @@ fn restrict_contour_to_circle(
     let mut i = 0;
     while i < contour.len() {
         let next_i = (i + 1) % contour.len();
-        let pr1_indicator = contour[i].indicator;
-        let pr2_indicator = contour[next_i].indicator;
+        let s1 = contour[i].state;
+        let s2 = contour[next_i].state;
 
-        if pr1_indicator == 1 || pr2_indicator == 1 {
-            if pr1_indicator == 1 && pr2_indicator == 1 {
+        if s1 == ContourState::Outside || s2 == ContourState::Outside {
+            if s1 == ContourState::Outside && s2 == ContourState::Outside {
                 // Both outside: check if segment crosses circle
                 if let Some(mp) =
                     project_point_inside_line(&ic.center, &contour[i].p, &contour[next_i].p)
@@ -555,7 +589,7 @@ fn restrict_contour_to_circle(
                     insertions += 2;
                     i += 2;
                 }
-            } else if pr1_indicator == 1 {
+            } else if s1 == ContourState::Outside {
                 // First outside, second inside
                 if let Some(ip) =
                     intersect_segment_with_circle(ic, &contour[next_i].p, &contour[i].p)
@@ -602,7 +636,7 @@ fn restrict_contour_to_circle(
     }
 
     // Remove outside points
-    contour.retain(|cp| cp.indicator != 1);
+    contour.retain(|cp| cp.state != ContourState::Outside);
 
     if contour.len() < 2 {
         contour.clear();
@@ -621,16 +655,15 @@ fn restrict_contour_to_circle(
             );
             contour[i].angle = angle;
             *sum_angles += angle;
-            contour[i].indicator = 2;
-            // Note: we modify next point's indicator but can't do it here due to borrow
+            contour[i].state = ContourState::ArcStart;
         }
     }
 
     // Mark end points of arcs
     for i in 0..contour.len() {
         let prev_i = if i > 0 { i - 1 } else { contour.len() - 1 };
-        if contour[prev_i].indicator == 2 {
-            contour[i].indicator = 3;
+        if contour[prev_i].state == ContourState::ArcStart {
+            contour[i].state = ContourState::ArcContinue;
         }
     }
 

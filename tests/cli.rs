@@ -1,6 +1,6 @@
 mod common;
 
-use std::io::Write;
+use std::io::{Read, Write};
 use std::process::Stdio;
 
 use approx::assert_abs_diff_eq;
@@ -106,4 +106,61 @@ fn cli_help() {
     assert!(stdout.contains("XYZR"));
     assert!(stdout.contains("--probe"));
     assert!(stdout.contains("--output"));
+}
+
+/// Run CLI with stdin input and return graphics file content
+macro_rules! run_graphics_test {
+    ($filename:expr, $input:expr) => {{
+        let temp_file = std::env::temp_dir().join($filename);
+        let mut child = common::binary_command()
+            .args([
+                "--probe",
+                "1.0",
+                "-q",
+                "--graphics-output-file-for-pymol",
+                temp_file.to_str().unwrap(),
+            ])
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .spawn()
+            .expect("failed to spawn binary");
+
+        child.stdin.take().unwrap().write_all($input).unwrap();
+        let output = child.wait_with_output().expect("failed to wait");
+        assert!(output.status.success());
+
+        let mut content = String::new();
+        std::fs::File::open(&temp_file)
+            .expect("failed to open graphics file")
+            .read_to_string(&mut content)
+            .expect("failed to read graphics file");
+        std::fs::remove_file(&temp_file).ok();
+        content
+    }};
+}
+
+#[test]
+fn cli_pymol_graphics_three_balls_line() {
+    let content = run_graphics_test!("test_graphics.py", b"0 0 0 1\n0.5 0 0 1\n1 0 0 1\n");
+
+    assert!(content.contains("from pymol.cgo import *"));
+    assert_eq!(content.matches("SPHERE,").count(), 3);
+    assert_eq!(content.matches("TRIANGLE_FAN").count(), 2);
+    assert_eq!(content.matches("LINE_LOOP").count(), 2);
+}
+
+#[test]
+fn cli_pymol_graphics_ring_17() {
+    let balls = b"0 0 2 1\n\
+        0 1 0 0.5\n0.382683 0.92388 0 0.5\n0.707107 0.707107 0 0.5\n\
+        0.92388 0.382683 0 0.5\n1 0 0 0.5\n0.92388 -0.382683 0 0.5\n\
+        0.707107 -0.707107 0 0.5\n0.382683 -0.92388 0 0.5\n0 -1 0 0.5\n\
+        -0.382683 -0.92388 0 0.5\n-0.707107 -0.707107 0 0.5\n\
+        -0.92388 -0.382683 0 0.5\n-1 0 0 0.5\n-0.92388 0.382683 0 0.5\n\
+        -0.707107 0.707107 0 0.5\n-0.382683 0.92388 0 0.5\n";
+
+    let content = run_graphics_test!("test_graphics_ring.py", balls);
+
+    assert_eq!(content.matches("SPHERE,").count(), 17);
+    assert!(content.matches("TRIANGLE_FAN").count() > 0);
 }

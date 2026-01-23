@@ -5,7 +5,7 @@
 //! CLI for computing radical Voronoi tessellation of molecular structures.
 
 use std::fs::File;
-use std::io::{self, BufRead};
+use std::io::{self, BufRead, BufWriter};
 use std::path::PathBuf;
 use std::time::Instant;
 
@@ -13,10 +13,14 @@ use clap::builder::styling::{AnsiColor, Effects, Styles};
 use clap::{ArgAction, Parser};
 use log::{debug, info};
 use serde::Serialize;
+use voronota_ltr::contact::construct_contact_descriptor;
+use voronota_ltr::graphics::GraphicsWriter;
 use voronota_ltr::input::{
     InputFormat, ParseOptions, RadiiLookup, build_chain_grouping, build_residue_grouping,
     parse_file_with_records, parse_reader,
 };
+use voronota_ltr::spheres_searcher::SpheresSearcher;
+use voronota_ltr::types::Sphere;
 use voronota_ltr::{Ball, PeriodicBox, Results, TessellationResult, compute_tessellation};
 
 /// Extended JSON output including per-ball SASA/volumes and totals
@@ -107,6 +111,10 @@ struct Cli {
     /// Measure and output running time to stderr
     #[arg(long)]
     measure_running_time: bool,
+
+    /// Output `PyMOL` CGO graphics script for visualizing contacts
+    #[arg(long, value_name = "PATH")]
+    graphics_output_file_for_pymol: Option<PathBuf>,
 }
 
 #[allow(clippy::too_many_lines)]
@@ -253,6 +261,12 @@ fn main() -> io::Result<()> {
         info!("Tessellation time: {} ms", elapsed.as_millis());
     }
 
+    // Generate PyMOL graphics if requested
+    if let Some(ref pymol_path) = cli.graphics_output_file_for_pymol {
+        generate_pymol_graphics(&balls, cli.probe, grouping.as_deref(), pymol_path)?;
+        info!("Wrote PyMOL graphics to {}", pymol_path.display());
+    }
+
     // Build extended JSON output with per-ball SASA/volumes and totals
     let output = JsonOutput {
         sas_areas: result.sas_areas(),
@@ -272,6 +286,51 @@ fn main() -> io::Result<()> {
         serde_json::to_writer_pretty(stdout, &output)?;
         println!();
     }
+
+    Ok(())
+}
+
+/// Generate `PyMOL` CGO graphics output.
+fn generate_pymol_graphics(
+    balls: &[Ball],
+    probe: f64,
+    groups: Option<&[i32]>,
+    path: &PathBuf,
+) -> io::Result<()> {
+    let spheres: Vec<Sphere> = balls.iter().map(|b| Sphere::from_ball(b, probe)).collect();
+    let searcher = SpheresSearcher::new(spheres);
+    let spheres = searcher.spheres();
+
+    // Find all collisions
+    let all_collisions: Vec<Vec<voronota_ltr::types::ValuedId>> = (0..spheres.len())
+        .map(|id| searcher.find_colliding_ids(id, true).colliding_ids)
+        .collect();
+
+    let mut writer = GraphicsWriter::new(balls.to_vec());
+    let angle_step = 0.5; // ~29 degrees
+
+    // Check if two atoms are in same group (skip if so)
+    let same_group = |a: usize, b: usize| -> bool {
+        groups.is_some_and(|g| a < g.len() && b < g.len() && g[a] == g[b])
+    };
+
+    // Construct contact descriptors and convert to graphics
+    for (a_id, neighbors) in all_collisions.iter().enumerate() {
+        for neighbor in neighbors {
+            let b_id = neighbor.index;
+            if a_id < b_id
+                && !same_group(a_id, b_id)
+                && let Some(cd) = construct_contact_descriptor(spheres, a_id, b_id, neighbors)
+                && let Some(graphics) = cd.to_graphics(angle_step)
+            {
+                writer.add_face(graphics);
+            }
+        }
+    }
+
+    let file = File::create(path)?;
+    let buf_writer = BufWriter::new(file);
+    writer.write_pymol(buf_writer, "contacts")?;
 
     Ok(())
 }

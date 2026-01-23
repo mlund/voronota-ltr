@@ -38,10 +38,12 @@ pub struct Sphere {
 }
 
 impl Sphere {
+    /// Create a sphere from center point and radius.
     pub const fn new(center: Point3<f64>, r: f64) -> Self {
         Self { center, r }
     }
 
+    /// Create a sphere from x, y, z coordinates and radius.
     #[allow(dead_code)]
     #[must_use]
     pub const fn from_coords(x: f64, y: f64, z: f64, r: f64) -> Self {
@@ -99,9 +101,11 @@ pub const NULL_ID: usize = usize::MAX;
 pub struct CellVertex {
     /// Indices of the (up to 4) balls defining this vertex. `None` indicates SAS boundary.
     pub ball_indices: [Option<usize>; 4],
-    /// 3D position of the vertex.
+    /// X coordinate of the vertex position.
     pub x: f64,
+    /// Y coordinate of the vertex position.
     pub y: f64,
+    /// Z coordinate of the vertex position.
     pub z: f64,
 }
 
@@ -144,6 +148,7 @@ pub struct ValuedId {
 }
 
 impl ValuedId {
+    /// Create a new valued ID pair.
     pub const fn new(value: f64, index: usize) -> Self {
         Self { value, index }
     }
@@ -563,6 +568,7 @@ impl PartialOrd for TessellationEdge {
 }
 
 impl CellContactSummary {
+    /// Accumulate contact contribution from a contact descriptor summary.
     pub fn add(&mut self, cds: &ContactDescriptorSummary) {
         if cds.area > 0.0 && (cds.id_a == self.id || cds.id_b == self.id) {
             self.count += 1;
@@ -585,6 +591,7 @@ impl CellContactSummary {
         }
     }
 
+    /// Accumulate contact contribution, setting the cell ID on first call.
     #[allow(dead_code)]
     pub fn add_with_id(&mut self, new_id: usize, cds: &ContactDescriptorSummary) {
         if cds.area > 0.0 {
@@ -595,6 +602,7 @@ impl CellContactSummary {
         }
     }
 
+    /// Compute SAS area and volume from accumulated contact contributions.
     pub fn compute_sas(&mut self, r: f64) {
         use std::f64::consts::PI;
 

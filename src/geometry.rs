@@ -22,26 +22,31 @@ pub const EPSILON: f64 = 1e-10;
 pub mod float_cmp {
     use super::EPSILON;
 
+    /// Fuzzy equality: `|a - b| <= EPSILON`
     #[inline]
     pub const fn eq(a: f64, b: f64) -> bool {
         (a - b).abs() <= EPSILON
     }
 
+    /// Fuzzy less-than: `a + EPSILON < b`
     #[inline]
     pub const fn lt(a: f64, b: f64) -> bool {
         a + EPSILON < b
     }
 
+    /// Fuzzy greater-than: `a - EPSILON > b`
     #[inline]
     pub const fn gt(a: f64, b: f64) -> bool {
         a - EPSILON > b
     }
 
+    /// Fuzzy less-or-equal: `a < b + EPSILON`
     #[inline]
     pub const fn le(a: f64, b: f64) -> bool {
         a < b + EPSILON
     }
 
+    /// Fuzzy greater-or-equal: `a + EPSILON > b`
     #[inline]
     pub const fn ge(a: f64, b: f64) -> bool {
         a + EPSILON > b
@@ -50,6 +55,7 @@ pub mod float_cmp {
 
 use float_cmp::{eq, ge, gt, le, lt};
 
+/// Check if two 3D points are approximately equal (within EPSILON).
 #[inline]
 pub fn point_equals(a: &Point3<f64>, b: &Point3<f64>) -> bool {
     eq(a.x, b.x) && eq(a.y, b.y) && eq(a.z, b.z)

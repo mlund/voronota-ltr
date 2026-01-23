@@ -119,6 +119,17 @@ voronota-ltr -i structure.pdb --radii-file custom_radii.txt
 voronota-ltr -i structure.xyzr --periodic-box-corners 0 0 0 100 100 100
 ```
 
+#### PyMOL visualization
+
+Generate a Python script to visualize contact surfaces in PyMOL:
+
+```sh
+voronota-ltr -i structure.pdb --inter-chain-only --graphics-output-file-for-pymol contacts.py
+pymol structure.pdb contacts.py
+```
+
+This creates three CGO objects: `contacts_balls` (cyan spheres), `contacts_faces` (yellow contact surfaces), and `contacts_wireframe` (red boundary lines).
+
 #### Loading JSON output in Python
 
 ```python
