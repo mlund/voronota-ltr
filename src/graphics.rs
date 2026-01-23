@@ -34,13 +34,56 @@ pub struct GraphicsWriter {
 }
 
 impl GraphicsWriter {
-    /// Create a new writer for the given input balls.
+    /// Create a new empty writer for the given input balls.
     #[must_use]
     pub const fn new(balls: Vec<Ball>) -> Self {
         Self {
             balls,
             faces: Vec::new(),
         }
+    }
+
+    /// Compute tessellation and create graphics for all contacts.
+    ///
+    /// # Arguments
+    /// * `balls` - Input spheres
+    /// * `probe` - Probe radius
+    /// * `groups` - Optional grouping; contacts within same group are excluded
+    /// * `angle_step` - Angular resolution for arc interpolation (radians)
+    #[must_use]
+    pub fn from_balls(balls: &[Ball], probe: f64, groups: Option<&[i32]>, angle_step: f64) -> Self {
+        use crate::contact::construct_contact_descriptor;
+        use crate::spheres_searcher::SpheresSearcher;
+        use crate::types::Sphere;
+
+        let spheres: Vec<Sphere> = balls.iter().map(|b| Sphere::from_ball(b, probe)).collect();
+        let searcher = SpheresSearcher::new(spheres);
+        let spheres = searcher.spheres();
+
+        let all_collisions: Vec<Vec<crate::types::ValuedId>> = (0..spheres.len())
+            .map(|id| searcher.find_colliding_ids(id, true).colliding_ids)
+            .collect();
+
+        let mut writer = Self::new(balls.to_vec());
+
+        let same_group = |a: usize, b: usize| -> bool {
+            groups.is_some_and(|g| a < g.len() && b < g.len() && g[a] == g[b])
+        };
+
+        for (a_id, neighbors) in all_collisions.iter().enumerate() {
+            for neighbor in neighbors {
+                let b_id = neighbor.index;
+                if a_id < b_id
+                    && !same_group(a_id, b_id)
+                    && let Some(cd) = construct_contact_descriptor(spheres, a_id, b_id, neighbors)
+                    && let Some(graphics) = cd.to_graphics(angle_step)
+                {
+                    writer.add_face(graphics);
+                }
+            }
+        }
+
+        writer
     }
 
     /// Add a contact face for rendering.

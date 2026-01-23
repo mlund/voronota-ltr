@@ -36,31 +36,24 @@
 //! }
 //! ```
 
-/// Contact descriptor construction and contour processing.
-pub mod contact;
-/// Geometric primitives and utility functions for sphere operations.
-pub mod geometry;
-/// PyMOL CGO graphics output for contact visualization.
-pub mod graphics;
+pub(crate) mod contact;
+pub(crate) mod geometry;
+pub(crate) mod graphics;
 /// Input file parsing (PDB, mmCIF, XYZR formats).
 pub mod input;
 mod solvent_spheres;
 mod spheres_container;
-/// Spatial indexing for efficient sphere collision detection.
-pub mod spheres_searcher;
+pub(crate) mod spheres_searcher;
 mod subdivided_icosahedron;
 mod tessellation;
-/// Core data types for tessellation input and output.
-pub mod types;
+pub(crate) mod types;
 mod updateable;
 
-pub use contact::{ContactDescriptor, ContourState, construct_contact_descriptor};
-pub use graphics::{ContactGraphics, GraphicsWriter};
+pub use graphics::GraphicsWriter;
 pub use solvent_spheres::{SolventSphere, SolventSpheresError, compute_solvent_spheres};
 pub use subdivided_icosahedron::SubdivisionDepth;
 pub use tessellation::compute_tessellation;
 pub use types::{
-    Ball, Cell, CellEdge, CellVertex, Contact, PeriodicBox, Results, Sphere, TessellationResult,
-    ValuedId,
+    Ball, Cell, CellEdge, CellVertex, Contact, PeriodicBox, Results, TessellationResult,
 };
 pub use updateable::{UpdateableResult, UpdateableTessellation};
