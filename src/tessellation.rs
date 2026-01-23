@@ -2,6 +2,7 @@
 // Part of the voronota-ltr project, licensed under the MIT License.
 // SPDX-License-Identifier: MIT
 
+use log::debug;
 use rayon::prelude::*;
 
 use crate::contact::construct_contact_descriptor;
@@ -128,6 +129,20 @@ fn compute_standard(
     } else {
         (None, None)
     };
+
+    debug!(
+        "Tessellation: {} balls, {} contacts, {} cells",
+        balls.len(),
+        contacts.len(),
+        cells.len()
+    );
+    if let Some(ref verts) = cell_vertices {
+        debug!(
+            "Cell vertices: {}, edges: {}",
+            verts.len(),
+            cell_edges.as_ref().map_or(0, Vec::len)
+        );
+    }
 
     TessellationResult {
         num_balls: balls.len(),
@@ -257,6 +272,11 @@ fn compute_periodic(
     groups: Option<&[i32]>,
     with_cell_vertices: bool,
 ) -> TessellationResult {
+    debug!(
+        "Periodic box: a={:?}, b={:?}, c={:?}",
+        periodic_box.shift_a, periodic_box.shift_b, periodic_box.shift_c
+    );
+
     if balls.is_empty() {
         return TessellationResult::default();
     }
@@ -268,6 +288,11 @@ fn compute_periodic(
 
     // Create 27 periodic images and build spatial index
     let populated_spheres = periodic_box.populate_periodic_spheres(&input_spheres);
+    debug!(
+        "Created {} periodic images from {} input spheres",
+        populated_spheres.len(),
+        n
+    );
     let searcher = SpheresSearcher::new(populated_spheres);
 
     // Find collisions for original spheres only (indices 0..n)
@@ -352,6 +377,20 @@ fn compute_periodic(
             arc_length: s.arc_length,
         })
         .collect();
+
+    debug!(
+        "Periodic tessellation: {} balls, {} contacts, {} cells",
+        n,
+        contacts.len(),
+        cells.len()
+    );
+    if let Some(ref verts) = cell_vertices {
+        debug!(
+            "Cell vertices: {}, edges: {}",
+            verts.len(),
+            cell_edges.as_ref().map_or(0, Vec::len)
+        );
+    }
 
     TessellationResult {
         num_balls: n,

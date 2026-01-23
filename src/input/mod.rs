@@ -160,6 +160,7 @@ pub fn parse_file(
     options: &ParseOptions,
     radii: &RadiiLookup,
 ) -> io::Result<Vec<Ball>> {
+    debug!("Opening file: {}", path.display());
     let file = File::open(path)?;
     let mut reader = BufReader::new(file);
 
@@ -303,6 +304,7 @@ pub fn parse_file_with_records(
     options: &ParseOptions,
     radii: &RadiiLookup,
 ) -> io::Result<ParsedStructure> {
+    debug!("Opening file: {}", path.display());
     let file = File::open(path)?;
     let mut reader = BufReader::new(file);
 

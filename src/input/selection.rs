@@ -7,6 +7,8 @@
 //! Supports boolean expressions with `and`, `or`, `not`, parentheses,
 //! and keywords like `chain`, `resname`, `resid`, `name`, `protein`, etc.
 
+use log::{debug, info};
+
 use super::AtomRecord;
 
 /// Selection parsing error.
@@ -713,9 +715,11 @@ impl Selection {
     /// # Errors
     /// Returns error if the expression is invalid.
     pub fn parse(input: &str) -> Result<Self, SelectionError> {
+        debug!("Parsing selection: {input:?}");
         let tokens = tokenize(input)?;
         let mut parser = Parser::new(&tokens);
         let expr = parser.parse()?;
+        debug!("Parsed selection expression: {expr:?}");
         Ok(Self { expr })
     }
 
@@ -737,7 +741,7 @@ pub fn parse_selections<S: AsRef<str>>(inputs: &[S]) -> Result<Vec<Selection>, S
         });
     }
 
-    inputs
+    let selections: Result<Vec<_>, _> = inputs
         .iter()
         .enumerate()
         .map(|(idx, input)| {
@@ -746,7 +750,12 @@ pub fn parse_selections<S: AsRef<str>>(inputs: &[S]) -> Result<Vec<Selection>, S
                 e
             })
         })
-        .collect()
+        .collect();
+
+    if let Ok(ref sels) = selections {
+        debug!("Successfully parsed {} selections", sels.len());
+    }
+    selections
 }
 
 /// Build grouping vector from selections.
@@ -756,6 +765,11 @@ pub fn parse_selections<S: AsRef<str>>(inputs: &[S]) -> Result<Vec<Selection>, S
 #[must_use]
 #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
 pub fn build_custom_grouping(records: &[AtomRecord], selections: &[Selection]) -> Vec<i32> {
+    info!(
+        "Building custom grouping for {} atoms with {} selections",
+        records.len(),
+        selections.len()
+    );
     let mut groups = vec![-1i32; records.len()];
     let num_selections = selections.len() as i32;
 
@@ -770,12 +784,23 @@ pub fn build_custom_grouping(records: &[AtomRecord], selections: &[Selection]) -
     }
 
     // Unmatched atoms get unique group IDs starting after selection groups
+    let mut unmatched_count = 0;
     let mut next_unique = num_selections;
     for group in &mut groups {
         if *group == -1 {
             *group = next_unique;
             next_unique += 1;
+            unmatched_count += 1;
         }
+    }
+
+    // Log per-group counts
+    for (i, sel) in selections.iter().enumerate() {
+        let count = groups.iter().filter(|&&g| g == i as i32).count();
+        info!("Selection {i} ({sel:?}): {count} atoms");
+    }
+    if unmatched_count > 0 {
+        info!("{unmatched_count} atoms did not match any selection");
     }
 
     groups
@@ -1172,6 +1197,25 @@ mod tests {
         fn requires_at_least_two_selections() {
             assert!(parse_selections(&selections(&["chain A"])).is_err());
             assert!(parse_selections(&selections(&[])).is_err());
+        }
+
+        #[test]
+        fn overlapping_selections_first_match_wins() {
+            // Atom matches both "chain A" and "resname ALA" - first selection wins
+            let records = vec![
+                make_record("A", "ALA", 1, "CA"), // matches both
+                make_record("A", "GLY", 2, "CA"), // matches only chain A
+                make_record("B", "ALA", 1, "CA"), // matches only resname ALA
+            ];
+            let sels = parse_selections(&selections(&["chain A", "resname ALA"])).unwrap();
+            let groups = build_custom_grouping(&records, &sels);
+
+            assert_eq!(
+                groups[0], 0,
+                "overlapping atom assigned to first matching selection"
+            );
+            assert_eq!(groups[1], 0, "chain A only");
+            assert_eq!(groups[2], 1, "resname ALA only");
         }
     }
 
