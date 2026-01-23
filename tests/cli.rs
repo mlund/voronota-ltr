@@ -1,173 +1,78 @@
+mod common;
+
 use std::io::Write;
-use std::process::{Command, Stdio};
+use std::process::Stdio;
 
-use serde::Deserialize;
-
-/// Default tolerance for floating-point comparisons
-const EPSILON: f64 = 0.01;
-
-fn binary() -> Command {
-    Command::new(env!("CARGO_BIN_EXE_voronota-ltr"))
-}
-
-macro_rules! assert_approx {
-    ($name:expr, $actual:expr, $expected:expr) => {
-        assert_approx!($name, $actual, $expected, EPSILON)
-    };
-    ($name:expr, $actual:expr, $expected:expr, $tol:expr) => {{
-        let (name, actual, expected, tol) = ($name, $actual, $expected, $tol);
-        let diff = (actual - expected).abs();
-        assert!(
-            diff <= tol,
-            "{name}: expected {expected}, got {actual} (diff {diff} > {tol})"
-        );
-    }};
-}
-
-#[derive(Deserialize)]
-struct Contact {
-    area: f64,
-}
-
-#[derive(Deserialize)]
-struct Cell {
-    sas_area: f64,
-    volume: f64,
-}
-
-#[derive(Deserialize)]
-struct TessellationResult {
-    contacts: Vec<Contact>,
-    cells: Vec<Cell>,
-}
-
-fn parse_json(output: &str) -> TessellationResult {
-    serde_json::from_str(output).expect("failed to parse JSON output")
-}
+use approx::assert_abs_diff_eq;
+use common::{EPSILON, parse_json, run_cli, tessellation_totals};
 
 #[test]
-fn test_balls_cs_1x1() {
-    let output = binary()
-        .args([
-            "-i",
-            "benches/data/balls_cs_1x1.xyzr",
-            "--probe",
-            "2.0",
-            "-q",
-        ])
-        .output()
-        .expect("failed to run binary");
-
-    assert!(output.status.success());
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let result = parse_json(&stdout);
+fn cli_balls_cs_1x1() {
+    #[rustfmt::skip]
+    let result = run_cli(&["-i", "benches/data/balls_cs_1x1.xyzr", "--probe", "2.0", "-q"]);
 
     assert_eq!(result.contacts.len(), 153);
     assert_eq!(result.cells.len(), 100);
 
-    let total_contact_area: f64 = result.contacts.iter().map(|c| c.area).sum();
-    let total_sas_area: f64 = result.cells.iter().map(|c| c.sas_area).sum();
-    let total_volume: f64 = result.cells.iter().map(|c| c.volume).sum();
+    let (total_contact_area, total_sas_area, total_volume) = tessellation_totals(&result);
 
-    assert_approx!("total_contact_area", total_contact_area, 3992.55);
-    assert_approx!("total_sas_area", total_sas_area, 21979.64);
-    assert_approx!("total_volume", total_volume, 46419.87);
+    assert_abs_diff_eq!(total_contact_area, 3992.55, epsilon = EPSILON);
+    assert_abs_diff_eq!(total_sas_area, 21979.64, epsilon = EPSILON);
+    assert_abs_diff_eq!(total_volume, 46419.87, epsilon = EPSILON);
 }
 
 #[test]
-fn test_balls_cs_1x1_periodic() {
-    let output = binary()
-        .args([
-            "-i",
-            "benches/data/balls_cs_1x1.xyzr",
-            "--probe",
-            "2.0",
-            "--periodic-box-corners",
-            "0",
-            "0",
-            "0",
-            "200",
-            "250",
-            "300",
-            "-q",
-        ])
-        .output()
-        .expect("failed to run binary");
-
-    assert!(output.status.success());
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let result = parse_json(&stdout);
+fn cli_balls_cs_1x1_periodic() {
+    #[rustfmt::skip]
+    let result = run_cli(&[
+        "-i", "benches/data/balls_cs_1x1.xyzr", "--probe", "2.0",
+        "--periodic-box-corners", "0", "0", "0", "200", "250", "300", "-q",
+    ]);
 
     assert_eq!(result.contacts.len(), 189);
     assert_eq!(result.cells.len(), 100);
 
-    let total_contact_area: f64 = result.contacts.iter().map(|c| c.area).sum();
-    let total_sas_area: f64 = result.cells.iter().map(|c| c.sas_area).sum();
-    let total_volume: f64 = result.cells.iter().map(|c| c.volume).sum();
+    let (total_contact_area, total_sas_area, total_volume) = tessellation_totals(&result);
 
-    assert_approx!("total_contact_area", total_contact_area, 4812.14);
-    assert_approx!("total_sas_area", total_sas_area, 20023.06);
-    assert_approx!("total_volume", total_volume, 45173.20);
+    assert_abs_diff_eq!(total_contact_area, 4812.14, epsilon = EPSILON);
+    assert_abs_diff_eq!(total_sas_area, 20023.06, epsilon = EPSILON);
+    assert_abs_diff_eq!(total_volume, 45173.20, epsilon = EPSILON);
 }
 
 #[test]
-fn test_balls_cs_1x1_periodic_directions() {
-    // Same box as test_balls_cs_1x1_periodic but using direction vectors
-    let output = binary()
-        .args([
-            "-i",
-            "benches/data/balls_cs_1x1.xyzr",
-            "--probe",
-            "2.0",
-            "--periodic-box-directions",
-            "200",
-            "0",
-            "0", // vector a
-            "0",
-            "250",
-            "0", // vector b
-            "0",
-            "0",
-            "300", // vector c
-            "-q",
-        ])
-        .output()
-        .expect("failed to run binary");
-
-    assert!(output.status.success());
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let result = parse_json(&stdout);
+fn cli_balls_cs_1x1_periodic_directions() {
+    #[rustfmt::skip]
+    let result = run_cli(&[
+        "-i", "benches/data/balls_cs_1x1.xyzr", "--probe", "2.0", "--periodic-box-directions",
+        "200", "0", "0",   // vector a
+        "0", "250", "0",   // vector b
+        "0", "0", "300",   // vector c
+        "-q",
+    ]);
 
     assert_eq!(result.contacts.len(), 189);
     assert_eq!(result.cells.len(), 100);
 
-    let total_contact_area: f64 = result.contacts.iter().map(|c| c.area).sum();
-    let total_sas_area: f64 = result.cells.iter().map(|c| c.sas_area).sum();
-    let total_volume: f64 = result.cells.iter().map(|c| c.volume).sum();
+    let (total_contact_area, total_sas_area, total_volume) = tessellation_totals(&result);
 
-    assert_approx!("total_contact_area", total_contact_area, 4812.14);
-    assert_approx!("total_sas_area", total_sas_area, 20023.06);
-    assert_approx!("total_volume", total_volume, 45173.20);
+    assert_abs_diff_eq!(total_contact_area, 4812.14, epsilon = EPSILON);
+    assert_abs_diff_eq!(total_sas_area, 20023.06, epsilon = EPSILON);
+    assert_abs_diff_eq!(total_volume, 45173.20, epsilon = EPSILON);
 }
 
 #[test]
-fn test_balls_2zsk() {
-    let output = binary()
-        .args(["-i", "benches/data/balls_2zsk.xyzr", "--probe", "1.4", "-q"])
-        .output()
-        .expect("failed to run binary");
-
-    assert!(output.status.success());
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let result = parse_json(&stdout);
+fn cli_balls_2zsk() {
+    #[rustfmt::skip]
+    let result = run_cli(&["-i", "benches/data/balls_2zsk.xyzr", "--probe", "1.4", "-q"]);
 
     assert_eq!(result.contacts.len(), 23855);
     assert_eq!(result.cells.len(), 3545);
 }
 
 #[test]
-fn test_stdin_input() {
-    let mut child = binary()
+fn cli_stdin_input() {
+    #[rustfmt::skip]
+    let mut child = common::binary_command()
         .args(["--probe", "1.0", "-q"])
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -190,8 +95,8 @@ fn test_stdin_input() {
 }
 
 #[test]
-fn test_help() {
-    let output = binary()
+fn cli_help() {
+    let output = common::binary_command()
         .arg("--help")
         .output()
         .expect("failed to run binary");
