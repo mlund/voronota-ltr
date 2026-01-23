@@ -1,0 +1,24 @@
+[build-system]
+requires = ["maturin>=1.0,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "voronota-ltr"
+requires-python = ">=3.8"
+classifiers = [
+    "Programming Language :: Rust",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "License :: OSI Approved :: MIT License",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+    "Topic :: Scientific/Engineering :: Chemistry",
+]
+dynamic = ["version", "description", "license", "authors", "readme"]
+
+[project.optional-dependencies]
+test = ["numpy"]
+
+[tool.maturin]
+features = ["python"]
+
+[[tool.maturin.bin]]
+name = "voronota-ltr"

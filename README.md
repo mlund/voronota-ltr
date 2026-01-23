@@ -18,6 +18,7 @@ Outputs inter-atom contact areas, solvent accessible surface (SAS) areas, and vo
 - [x] Parallel processing using Rayon - see benchmarks below
 - [x] PDB, mmCIF, and XYZR input formats with auto-detection
 - [x] Unit-tests and benchmarks carried over from the C++ side
+- [x] Python bindings via PyO3
 - Based on Voronota-LT v1.1.479 (`f5ad92de4e9723ab767db3e5035c0e7532f31595`)
 
 ## Installation
@@ -28,7 +29,7 @@ The port can be used either as a library for other projects, or as a basic CLI t
 cargo install voronota-ltr
 ```
 
-## Examples
+## Rust API
 
 ```rust
 use voronota_ltr::{Ball, Results, compute_tessellation};
@@ -96,7 +97,7 @@ println!("Total contacts: {}", summary.contacts.len());
 tess.restore();
 ```
 
-### CLI
+## Command Line Tool
 
 Supports PDB, mmCIF, and XYZR input formats (auto-detected from extension or content):
 
@@ -120,7 +121,7 @@ voronota-ltr structure.pdb --radii-file custom_radii.txt
 voronota-ltr structure.xyzr --periodic-box-corners 0 0 0 100 100 100
 ```
 
-#### Custom selections
+### Custom selections
 
 Group atoms using VMD-like selection syntax to filter contacts.
 Only inter-group contacts are computed.
@@ -135,18 +136,9 @@ voronota-ltr 5IN3.cif -s "chain A" "chain B"
 
 See the [Selection Language](#selection-language) section for full syntax.
 
-#### PyMOL visualization
+### Loading JSON output in Python
 
-Generate a Python script to visualize contact surfaces in PyMOL:
-
-```sh
-voronota-ltr structure.pdb --inter-chain-only --pymol contacts.py
-pymol structure.pdb contacts.py
-```
-
-This creates three CGO objects: `contacts_balls` (cyan spheres), `contacts_faces` (yellow contact surfaces), and `contacts_wireframe` (red boundary lines).
-
-#### Loading JSON output in Python
+If using the CLI, results can be loaded from JSON:
 
 ```python
 import json
@@ -166,6 +158,101 @@ total_contact_area = data["total_contact_area"]
 # Contact details
 for contact in data["contacts"]:
     print(f"Contact {contact['id_a']}-{contact['id_b']}: area={contact['area']:.2f}")
+```
+
+### PyMOL visualization
+
+Generate a Python script to visualize contact surfaces in PyMOL:
+
+```sh
+voronota-ltr structure.pdb --inter-chain-only --pymol contacts.py
+pymol structure.pdb contacts.py
+```
+
+This creates three CGO objects: `contacts_balls` (cyan spheres), `contacts_faces` (yellow contact surfaces), and `contacts_wireframe` (red boundary lines).
+
+## Python Interface
+
+Build and install locally using [maturin](https://www.maturin.rs/):
+
+```sh
+pip install maturin
+maturin develop --features python          # Development build
+maturin develop --features python --release  # Optimized build
+```
+
+This installs both the Python module and CLI binary.
+
+Run tests:
+
+```sh
+python -m unittest discover -s tests -p "test_*.py"
+```
+
+Basic usage:
+
+```python
+import voronota_ltr
+
+result = voronota_ltr.compute_tessellation(
+    balls=[(0, 0, 0, 1.5), (3, 0, 0, 1.5), (1.5, 2.5, 0, 1.5)],
+    probe=1.4,
+)
+
+print(f"Total SAS area: {result['total_sas_area']:.2f}")
+print(f"Total volume: {result['total_volume']:.2f}")
+
+for contact in result["contacts"]:
+    print(f"Contact {contact['id_a']}-{contact['id_b']}: area={contact['area']:.2f}")
+```
+
+Input balls can be tuples, dicts, or NumPy arrays:
+
+```python
+import numpy as np
+
+# Tuples
+balls = [(0, 0, 0, 1.5), (3, 0, 0, 1.5)]
+
+# Dicts
+balls = [{"x": 0, "y": 0, "z": 0, "r": 1.5}, {"x": 3, "y": 0, "z": 0, "r": 1.5}]
+
+# NumPy array (N x 4)
+balls = np.array([[0, 0, 0, 1.5], [3, 0, 0, 1.5]])
+
+result = voronota_ltr.compute_tessellation(balls=balls, probe=1.4)
+```
+
+With periodic boundaries:
+
+```python
+# Orthorhombic box from corner coordinates
+result = voronota_ltr.compute_tessellation(
+    balls=balls,
+    probe=1.4,
+    periodic_box={"corners": [(0, 0, 0), (50, 50, 50)]},
+)
+
+# Triclinic cell from lattice vectors
+result = voronota_ltr.compute_tessellation(
+    balls=balls,
+    probe=1.4,
+    periodic_box={"vectors": [(50, 0, 0), (0, 50, 0), (0, 0, 50)]},
+)
+```
+
+With tessellation network output:
+
+```python
+result = voronota_ltr.compute_tessellation(
+    balls=balls,
+    probe=1.4,
+    with_cell_vertices=True,
+)
+
+for vertex in result["cell_vertices"]:
+    print(f"Vertex at ({vertex['x']:.2f}, {vertex['y']:.2f}, {vertex['z']:.2f})")
+    print(f"  On SAS: {vertex['is_on_sas']}")
 ```
 
 ## Selection Language

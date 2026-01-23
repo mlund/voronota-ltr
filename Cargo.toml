@@ -11,9 +11,14 @@ repository = "https://github.com/mlund/voronota-ltr"
 keywords = ["voronoi", "tessellation", "molecule", "sasa", "bioinformatics"]
 description = "Voronota-LT is an alternative version of Voronota for constructing tessellation-derived atomic contact areas and volumes."
 
+[lib]
+name = "voronota_ltr"
+crate-type = ["cdylib", "rlib"]
+
 [features]
 default = ["serde"]
 serde = ["dep:serde", "dep:serde_json", "nalgebra/serde-serialize"]
+python = ["dep:pyo3", "dep:numpy"]
 
 [dependencies]
 clap = { version = "4.5", features = ["derive"] }
@@ -23,6 +28,8 @@ nalgebra = "0.34"
 rayon = "1.11"
 serde = { version = "1", features = ["derive"], optional = true }
 serde_json = { version = "1", optional = true }
+pyo3 = { version = "0.23", features = ["extension-module"], optional = true }
+numpy = { version = "0.23", optional = true }
 
 [dev-dependencies]
 approx = "0.5"

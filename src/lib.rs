@@ -42,6 +42,8 @@ pub(crate) mod geometry;
 pub(crate) mod graphics;
 /// Input file parsing (PDB, mmCIF, XYZR formats).
 pub mod input;
+#[cfg(feature = "python")]
+mod python;
 mod solvent_spheres;
 mod spheres_container;
 pub(crate) mod spheres_searcher;
