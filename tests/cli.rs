@@ -9,7 +9,7 @@ use common::{EPSILON, parse_json, run_cli, tessellation_totals};
 #[test]
 fn cli_balls_cs_1x1() {
     #[rustfmt::skip]
-    let result = run_cli(&["-i", "benches/data/balls_cs_1x1.xyzr", "--probe", "2.0", "-q"]);
+    let result = run_cli(&["benches/data/balls_cs_1x1.xyzr", "--probe", "2.0", "-q"]);
 
     assert_eq!(result.contacts.len(), 153);
     assert_eq!(result.cells.len(), 100);
@@ -25,7 +25,7 @@ fn cli_balls_cs_1x1() {
 fn cli_balls_cs_1x1_periodic() {
     #[rustfmt::skip]
     let result = run_cli(&[
-        "-i", "benches/data/balls_cs_1x1.xyzr", "--probe", "2.0",
+        "benches/data/balls_cs_1x1.xyzr", "--probe", "2.0",
         "--periodic-box-corners", "0", "0", "0", "200", "250", "300", "-q",
     ]);
 
@@ -43,7 +43,7 @@ fn cli_balls_cs_1x1_periodic() {
 fn cli_balls_cs_1x1_periodic_directions() {
     #[rustfmt::skip]
     let result = run_cli(&[
-        "-i", "benches/data/balls_cs_1x1.xyzr", "--probe", "2.0", "--periodic-box-directions",
+        "benches/data/balls_cs_1x1.xyzr", "--probe", "2.0", "--periodic-box-directions",
         "200", "0", "0",   // vector a
         "0", "250", "0",   // vector b
         "0", "0", "300",   // vector c
@@ -63,7 +63,7 @@ fn cli_balls_cs_1x1_periodic_directions() {
 #[test]
 fn cli_balls_2zsk() {
     #[rustfmt::skip]
-    let result = run_cli(&["-i", "benches/data/balls_2zsk.xyzr", "--probe", "1.4", "-q"]);
+    let result = run_cli(&["benches/data/balls_2zsk.xyzr", "--probe", "1.4", "-q"]);
 
     assert_eq!(result.contacts.len(), 23855);
     assert_eq!(result.cells.len(), 3545);
@@ -117,7 +117,7 @@ macro_rules! run_graphics_test {
                 "--probe",
                 "1.0",
                 "-q",
-                "--graphics-output-file-for-pymol",
+                "--pymol",
                 temp_file.to_str().unwrap(),
             ])
             .stdin(Stdio::piped())

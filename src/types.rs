@@ -195,12 +195,14 @@ pub trait Results {
     /// Get solvent-accessible surface area for each ball as a Vec.
     ///
     /// Returns a Vec of length `num_balls` where index `i` contains the
-    /// SAS area for ball `i`. Balls without computed cells get 0.0.
+    /// SAS area for ball `i`. Returns `None` for atoms without contacts
+    /// (lonely atoms); users can compute their full spherical surface
+    /// area as `4 * π * (r + probe)²` if needed.
     #[must_use]
-    fn sas_areas(&self) -> Vec<f64> {
-        let mut result = vec![0.0; self.num_balls()];
+    fn sas_areas(&self) -> Vec<Option<f64>> {
+        let mut result = vec![None; self.num_balls()];
         for cell in self.cells() {
-            result[cell.index] = cell.sas_area;
+            result[cell.index] = Some(cell.sas_area);
         }
         result
     }
@@ -208,23 +210,31 @@ pub trait Results {
     /// Get cell volumes for each ball as a Vec.
     ///
     /// Returns a Vec of length `num_balls` where index `i` contains the
-    /// volume for ball `i`. Balls without computed cells get 0.0.
+    /// volume for ball `i`. Returns `None` for atoms without contacts
+    /// (lonely atoms); users can compute their full spherical volume
+    /// as `4/3 * π * (r + probe)³` if needed.
     #[must_use]
-    fn volumes(&self) -> Vec<f64> {
-        let mut result = vec![0.0; self.num_balls()];
+    fn volumes(&self) -> Vec<Option<f64>> {
+        let mut result = vec![None; self.num_balls()];
         for cell in self.cells() {
-            result[cell.index] = cell.volume;
+            result[cell.index] = Some(cell.volume);
         }
         result
     }
 
     /// Get total solvent-accessible surface area across all balls.
+    ///
+    /// Only includes atoms with computed cells (atoms with contacts).
+    /// Lonely atoms (no contacts) are excluded from the sum.
     #[must_use]
     fn total_sas_area(&self) -> f64 {
         self.cells().iter().map(|c| c.sas_area).sum()
     }
 
     /// Get total volume across all balls.
+    ///
+    /// Only includes atoms with computed cells (atoms with contacts).
+    /// Lonely atoms (no contacts) are excluded from the sum.
     #[must_use]
     fn total_volume(&self) -> f64 {
         self.cells().iter().map(|c| c.volume).sum()

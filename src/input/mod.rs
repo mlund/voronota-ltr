@@ -9,6 +9,7 @@
 pub mod mmcif;
 pub mod pdb;
 pub mod radii;
+pub mod selection;
 
 use std::fs::File;
 use std::io::{self, BufRead, BufReader, Read};
@@ -17,6 +18,9 @@ use std::path::Path;
 use log::{debug, info};
 
 pub use radii::RadiiLookup;
+pub use selection::{
+    GlobPattern, Selection, SelectionError, build_custom_grouping, parse_selections,
+};
 
 use crate::Ball;
 

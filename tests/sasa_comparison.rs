@@ -74,9 +74,10 @@ fn test_sasa_comparison_with_rust_sasa() {
         rust_sasa_result.iter().zip(voronota_sas.iter()).enumerate()
     {
         let rust_f64 = f64::from(*rust_val);
+        let voronota_f64 = voronota_val.unwrap_or(0.0);
         total_rust += rust_f64;
-        total_voronota += voronota_val;
-        let diff = (rust_f64 - voronota_val).abs();
+        total_voronota += voronota_f64;
+        let diff = (rust_f64 - voronota_f64).abs();
         let rel_diff = if rust_f64 > 0.01 {
             diff / rust_f64 * 100.0
         } else {
@@ -84,7 +85,7 @@ fn test_sasa_comparison_with_rust_sasa() {
         };
         eprintln!(
             "Atom {}: rust-sasa={:7.3}, voronota={:7.3}, diff={:6.3} ({:5.1}%)",
-            i, rust_val, voronota_val, diff, rel_diff
+            i, rust_val, voronota_f64, diff, rel_diff
         );
     }
 

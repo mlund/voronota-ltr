@@ -42,8 +42,9 @@ let balls = vec![
 let result = compute_tessellation(&balls, 1.4, None, None, false);
 
 // Per-ball SAS areas and volumes (indexed by ball)
-let sas_areas: Vec<f64> = result.sas_areas();
-let volumes: Vec<f64> = result.volumes();
+// Returns None for atoms without contacts (lonely atoms)
+let sas_areas: Vec<Option<f64>> = result.sas_areas();
+let volumes: Vec<Option<f64>> = result.volumes();
 
 // Total SAS area
 let total_sas: f64 = result.total_sas_area();
@@ -101,30 +102,45 @@ Supports PDB, mmCIF, and XYZR input formats (auto-detected from extension or con
 
 ```sh
 # PDB / mmCIF / XYZR input
-voronota-ltr -i structure.pdb --probe 1.4
+voronota-ltr structure.pdb --probe 1.4
 
 # Save JSON output to file instead of stdout
-voronota-ltr -i structure.pdb -o results.json
+voronota-ltr structure.pdb -o results.json
 
 # Exclude heteroatoms (HETATM records)
-voronota-ltr -i structure.pdb --exclude-heteroatoms
+voronota-ltr structure.pdb --exclude-heteroatoms
 
 # Include hydrogen atoms (excluded by default)
-voronota-ltr -i structure.pdb --include-hydrogens
+voronota-ltr structure.pdb --include-hydrogens
 
 # Custom radii file (format: residue atom radius per line)
-voronota-ltr -i structure.pdb --radii-file custom_radii.txt
+voronota-ltr structure.pdb --radii-file custom_radii.txt
 
 # With periodic boundary conditions
-voronota-ltr -i structure.xyzr --periodic-box-corners 0 0 0 100 100 100
+voronota-ltr structure.xyzr --periodic-box-corners 0 0 0 100 100 100
 ```
+
+#### Custom selections
+
+Group atoms using VMD-like selection syntax to filter contacts.
+Only inter-group contacts are computed.
+
+```sh
+# Protein-ligand interface (5IN3: galactose-1-phosphate uridylyltransferase)
+voronota-ltr 5IN3.cif -s "protein" "resname G1P H2U"
+
+# Homodimer interface
+voronota-ltr 5IN3.cif -s "chain A" "chain B"
+```
+
+See the [Selection Language](#selection-language) section for full syntax.
 
 #### PyMOL visualization
 
 Generate a Python script to visualize contact surfaces in PyMOL:
 
 ```sh
-voronota-ltr -i structure.pdb --inter-chain-only --graphics-output-file-for-pymol contacts.py
+voronota-ltr structure.pdb --inter-chain-only --pymol contacts.py
 pymol structure.pdb contacts.py
 ```
 
@@ -138,9 +154,9 @@ import json
 with open("results.json") as f:
     data = json.load(f)
 
-# Per-ball data (indexed by ball)
-sas_areas = data["sas_areas"]
-volumes = data["volumes"]
+# Per-ball data (indexed by ball, None for atoms without contacts)
+sas_areas = data["sas_areas"]  # list of float or None
+volumes = data["volumes"]  # list of float or None
 
 # Totals
 total_sasa = data["total_sas_area"]
@@ -151,6 +167,61 @@ total_contact_area = data["total_contact_area"]
 for contact in data["contacts"]:
     print(f"Contact {contact['id_a']}-{contact['id_b']}: area={contact['area']:.2f}")
 ```
+
+## Selection Language
+
+The `-s/--selection` flag accepts VMD-like selection syntax for defining atom groups.
+Only contacts between different groups are computed, which is useful for interface analysis.
+
+### Syntax
+
+```sh
+voronota-ltr file.pdb -s "selection1" "selection2" ...
+```
+
+At least two selections are required. Only contacts between atoms in *different* groups are computed.
+
+### Keywords
+
+| Keyword | Description | Example |
+|---------|-------------|---------|
+| `chain` | Chain identifier(s) | `chain A B` |
+| `resname` | Residue name(s) | `resname ALA GLY` |
+| `resid` | Residue number(s) or range | `resid 1 to 100` or `resid 1:100` |
+| `name` | Atom name(s) with glob patterns | `name CA` or `name C*` |
+| `protein` | Standard amino acids | `protein` |
+| `backbone` | Protein backbone (C, CA, N, O) | `backbone` |
+| `sidechain` | Protein sidechains (non-backbone) | `sidechain` |
+| `nucleic` | Nucleic acid residues | `nucleic` |
+| `hetatm` | HETATM records | `hetatm` |
+| `hydrophobic` | Hydrophobic residues (ALA, VAL, LEU, ILE, MET, PHE, TRP, PRO, GLY) | `hydrophobic` |
+| `aromatic` | Aromatic residues (PHE, TYR, TRP, HIS) | `aromatic` |
+| `acidic` | Acidic residues (ASP, GLU) | `acidic` |
+| `basic` | Basic residues (ARG, LYS, HIS) | `basic` |
+| `polar` | Polar residues (SER, THR, ASN, GLN) | `polar` |
+| `charged` | Charged residues (ASP, GLU, ARG, LYS) | `charged` |
+| `all` | All atoms | `all` |
+| `none` | No atoms | `none` |
+
+### Boolean operators
+
+Combine selections with `and`, `or`, `not`, and parentheses:
+
+```sh
+# Sidechain-only dimer interface (exclude backbone)
+voronota-ltr 5IN3.cif -s "chain A and sidechain" "chain B and sidechain"
+
+# Protein-ligand contacts, excluding cryoprotectant (EDO)
+voronota-ltr 5IN3.cif -s "protein and not resname EDO" "resname G1P H2U ZN"
+```
+
+### Glob patterns
+
+Atom and residue names support glob wildcards:
+
+- `*` matches any characters: `name C*` matches CA, CB, CG, etc.
+- `?` matches single character: `name ?A` matches CA, NA, etc.
+- `[abc]` matches character class: `name C[AG]` matches CA or CG
 
 ## Benchmarks
 

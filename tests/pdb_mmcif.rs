@@ -300,3 +300,53 @@ fn inter_residue_contacts_only() {
     );
     assert_abs_diff_eq!(result.total_contact_area(), 4486.49, epsilon = EPSILON);
 }
+
+/// Compare selection counts against MDTraj reference values.
+/// Values obtained via: `mdtraj.load('tests/data/assembly_1ctf.cif').topology.select(...)`
+#[test]
+fn selection_counts_match_mdtraj() {
+    use voronota_ltr::input::{Selection, parse_file_with_records};
+
+    let Some(cif_path) = require_test_file("assembly_1ctf.cif") else {
+        return;
+    };
+
+    let radii = RadiiLookup::new();
+    let options = ParseOptions {
+        exclude_heteroatoms: true,
+        ..Default::default()
+    };
+
+    let parsed =
+        parse_file_with_records(&cif_path, &options, &radii).expect("Failed to parse mmCIF file");
+
+    let count = |sel_str: &str| -> usize {
+        let sel = Selection::parse(sel_str).unwrap();
+        parsed.records.iter().filter(|r| sel.matches(r)).count()
+    };
+
+    // MDTraj reference values (from assembly_1ctf.cif, excludes hydrogens)
+    // Total atoms in MDTraj: 1108 (includes H), our parser: 974 (excludes H)
+    let mdtraj_values = [
+        ("protein", 974),
+        ("backbone", 544),
+        ("sidechain", 430),
+        ("resname ALA", 150),
+        ("resname ALA GLY", 198),
+        ("hydrophobic", 490),
+        ("aromatic", 22),
+        ("acidic", 226),
+        ("basic", 204),
+        ("polar", 54),
+        ("charged", 430),
+    ];
+
+    for (sel_str, expected) in mdtraj_values {
+        let actual = count(sel_str);
+        assert_eq!(
+            actual, expected,
+            "Selection '{}': expected {} atoms (MDTraj), got {}",
+            sel_str, expected, actual
+        );
+    }
+}

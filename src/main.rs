@@ -14,18 +14,20 @@ use clap::{ArgAction, Parser};
 use log::{debug, info};
 use serde::Serialize;
 use voronota_ltr::input::{
-    InputFormat, ParseOptions, RadiiLookup, build_chain_grouping, build_residue_grouping,
-    parse_file_with_records, parse_reader,
+    InputFormat, ParseOptions, RadiiLookup, build_chain_grouping, build_custom_grouping,
+    build_residue_grouping, parse_file_with_records, parse_reader, parse_selections,
 };
-use voronota_ltr::{Ball, PeriodicBox, Results, TessellationResult, compute_tessellation};
+use voronota_ltr::{PeriodicBox, Results, TessellationResult, compute_tessellation};
 
 /// Extended JSON output including per-ball SASA/volumes and totals
 #[derive(Serialize)]
 struct JsonOutput {
     #[serde(flatten)]
     result: TessellationResult,
-    sas_areas: Vec<f64>,
-    volumes: Vec<f64>,
+    /// Per-ball SAS areas. `null` for atoms without contacts (lonely atoms).
+    sas_areas: Vec<Option<f64>>,
+    /// Per-ball volumes. `null` for atoms without contacts (lonely atoms).
+    volumes: Vec<Option<f64>>,
     total_sas_area: f64,
     total_volume: f64,
     total_contact_area: f64,
@@ -57,7 +59,6 @@ struct Cli {
     probe: f64,
 
     /// Input file (PDB, mmCIF, or XYZR format). Reads from stdin if not specified
-    #[arg(short, long)]
     input: Option<PathBuf>,
 
     /// Output JSON file. Writes to stdout if not specified
@@ -92,6 +93,11 @@ struct Cli {
     #[arg(long)]
     inter_residue_only: bool,
 
+    /// Group atoms for inter-group contacts only (VMD-like syntax)
+    /// Example: -s "protein" "resname LIG"
+    #[arg(short, long, value_name = "EXPR", num_args = 2.., conflicts_with_all = ["inter_chain_only", "inter_residue_only"])]
+    selection: Vec<String>,
+
     /// Increase verbosity (-v: debug, -vv: trace)
     #[arg(short, long, action = ArgAction::Count)]
     verbose: u8,
@@ -110,7 +116,7 @@ struct Cli {
 
     /// Output `PyMOL` CGO graphics script for visualizing contacts
     #[arg(long, value_name = "PATH")]
-    graphics_output_file_for_pymol: Option<PathBuf>,
+    pymol: Option<PathBuf>,
 }
 
 #[allow(clippy::too_many_lines)]
@@ -155,11 +161,22 @@ fn main() -> io::Result<()> {
     };
 
     // Read input balls and records
-    let (balls, grouping): (Vec<Ball>, Option<Vec<i32>>) = if let Some(path) = &cli.input {
+    let (balls, grouping) = if let Some(ref path) = cli.input {
         let parsed = parse_file_with_records(path, &options, &radii)?;
 
-        // Build grouping if inter-chain or inter-residue filtering requested
-        let grouping = if cli.inter_chain_only {
+        // Build grouping based on requested filtering mode
+        let grouping = if !cli.selection.is_empty() {
+            if parsed.records.is_empty() {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    "--selection requires PDB or mmCIF input (not XYZR)",
+                ));
+            }
+            let selections = parse_selections(&cli.selection)
+                .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e.to_string()))?;
+            info!("Parsed {} selection groups", selections.len());
+            Some(build_custom_grouping(&parsed.records, &selections))
+        } else if cli.inter_chain_only {
             if parsed.records.is_empty() {
                 return Err(io::Error::new(
                     io::ErrorKind::InvalidInput,
@@ -181,15 +198,13 @@ fn main() -> io::Result<()> {
 
         (parsed.balls, grouping)
     } else {
-        // For stdin, try to detect format
+        // Read from stdin
         let stdin = io::stdin();
         let mut reader = stdin.lock();
         let mut first_line = String::new();
         reader.read_line(&mut first_line)?;
 
         let trimmed = first_line.trim();
-
-        // Detect format from first line
         let format = if trimmed.starts_with("data_")
             || trimmed.starts_with('_')
             || trimmed.starts_with("loop_")
@@ -207,11 +222,10 @@ fn main() -> io::Result<()> {
 
         debug!("Detected stdin format: {format:?}");
 
-        // Note: stdin doesn't support grouping yet (would need parse_reader_with_records)
-        if cli.inter_chain_only || cli.inter_residue_only {
+        if !cli.selection.is_empty() || cli.inter_chain_only || cli.inter_residue_only {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
-                "--inter-chain-only and --inter-residue-only require file input (-i)",
+                "--selection, --inter-chain-only, and --inter-residue-only require file input",
             ));
         }
 
@@ -258,7 +272,7 @@ fn main() -> io::Result<()> {
     }
 
     // Generate PyMOL graphics if requested
-    if let Some(ref pymol_path) = cli.graphics_output_file_for_pymol {
+    if let Some(ref pymol_path) = cli.pymol {
         use voronota_ltr::GraphicsWriter;
         let writer = GraphicsWriter::from_balls(&balls, cli.probe, grouping.as_deref(), 0.5);
         let file = File::create(pymol_path)?;
@@ -291,7 +305,7 @@ fn main() -> io::Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use voronota_ltr::Ball;
 
     #[test]
     fn parse_balls_reads_last_four_columns() {

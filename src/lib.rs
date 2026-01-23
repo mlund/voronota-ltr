@@ -25,10 +25,11 @@
 //! let result = compute_tessellation(&balls, 1.4, None, None, false);
 //!
 //! // Per-ball SAS areas and volumes (indexed by ball)
-//! let sas_areas: Vec<f64> = result.sas_areas();
-//! let volumes: Vec<f64> = result.volumes();
+//! // Returns None for atoms without contacts (lonely atoms)
+//! let sas_areas: Vec<Option<f64>> = result.sas_areas();
+//! let volumes: Vec<Option<f64>> = result.volumes();
 //!
-//! // Total SAS area
+//! // Total SAS area (excludes lonely atoms)
 //! let total_sas: f64 = result.total_sas_area();
 //!
 //! for contact in &result.contacts {
