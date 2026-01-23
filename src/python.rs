@@ -8,6 +8,9 @@ use numpy::{PyReadonlyArray2, PyUntypedArrayMethods};
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList, PyTuple};
 
+use std::path::Path;
+
+use crate::input::compute_tessellation_from_file as compute_from_file_rs;
 use crate::{Ball, PeriodicBox, Results, compute_tessellation as compute_tessellation_rs};
 
 /// Extract a required key from a Python dict.
@@ -255,9 +258,70 @@ fn compute_tessellation<'py>(
     result_to_dict(py, &result)
 }
 
+/// Compute tessellation directly from a molecular structure file.
+///
+/// High-level function that reads a PDB, mmCIF, or XYZR file and computes
+/// the radical Voronoi tessellation in a single call.
+///
+/// # Arguments
+///
+/// * `path` - Path to input file (PDB, mmCIF, or XYZR format, auto-detected)
+/// * `probe` - Probe radius for solvent-accessible surface (typically 1.4 for water)
+/// * `periodic_box` - Optional periodic boundary conditions as dict:
+///   - `{"corners": [(x1,y1,z1), (x2,y2,z2)]}` for orthorhombic box
+///   - `{"vectors": [(ax,ay,az), (bx,by,bz), (cx,cy,cz)]}` for triclinic cell
+/// * `with_cell_vertices` - If True, include tessellation vertices and edges in output
+/// * `group_selections` - Optional list of VMD-like selection strings for inter-group contacts.
+///   Must contain at least two selections. Only contacts between atoms in different groups
+///   are computed. Example: `["protein", "resname LIG"]`
+///
+/// # Returns
+///
+/// Dict containing tessellation results (same format as `compute_tessellation`).
+///
+/// # Raises
+///
+/// * `IOError` - If file cannot be read
+/// * `ValueError` - If selection syntax is invalid or fewer than two selections provided
+#[pyfunction]
+#[pyo3(signature = (path, probe, periodic_box=None, with_cell_vertices=false, group_selections=None))]
+#[allow(clippy::needless_pass_by_value)] // PyO3 requires owned values for extraction
+fn compute_tessellation_from_file<'py>(
+    py: Python<'py>,
+    path: &str,
+    probe: f64,
+    periodic_box: Option<&Bound<'_, PyAny>>,
+    with_cell_vertices: bool,
+    group_selections: Option<Vec<String>>,
+) -> PyResult<Bound<'py, PyDict>> {
+    let pbox = periodic_box.map(parse_periodic_box).transpose()?;
+    let path = Path::new(path);
+
+    // Convert Vec<String> to Vec<&str> for the Rust API
+    let selections: Option<Vec<&str>> = group_selections
+        .as_ref()
+        .map(|v| v.iter().map(String::as_str).collect());
+
+    // Release GIL during computation
+    let result = py
+        .allow_threads(|| {
+            compute_from_file_rs(
+                path,
+                probe,
+                pbox.as_ref(),
+                with_cell_vertices,
+                selections.as_deref(),
+            )
+        })
+        .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?;
+
+    result_to_dict(py, &result)
+}
+
 /// Python module definition.
 #[pymodule]
 fn voronota_ltr(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(compute_tessellation, m)?)?;
+    m.add_function(wrap_pyfunction!(compute_tessellation_from_file, m)?)?;
     Ok(())
 }

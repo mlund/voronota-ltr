@@ -192,9 +192,9 @@ python -m unittest discover -s tests -p "test_*.py"
 Basic usage:
 
 ```python
-import voronota_ltr
+from voronota_ltr import compute_tessellation
 
-result = voronota_ltr.compute_tessellation(
+result = compute_tessellation(
     balls=[(0, 0, 0, 1.5), (3, 0, 0, 1.5), (1.5, 2.5, 0, 1.5)],
     probe=1.4,
 )
@@ -209,6 +209,7 @@ for contact in result["contacts"]:
 Input balls can be tuples, dicts, or NumPy arrays:
 
 ```python
+from voronota_ltr import compute_tessellation
 import numpy as np
 
 # Tuples
@@ -220,21 +221,23 @@ balls = [{"x": 0, "y": 0, "z": 0, "r": 1.5}, {"x": 3, "y": 0, "z": 0, "r": 1.5}]
 # NumPy array (N x 4)
 balls = np.array([[0, 0, 0, 1.5], [3, 0, 0, 1.5]])
 
-result = voronota_ltr.compute_tessellation(balls=balls, probe=1.4)
+result = compute_tessellation(balls=balls, probe=1.4)
 ```
 
 With periodic boundaries:
 
 ```python
+from voronota_ltr import compute_tessellation
+
 # Orthorhombic box from corner coordinates
-result = voronota_ltr.compute_tessellation(
+result = compute_tessellation(
     balls=balls,
     probe=1.4,
     periodic_box={"corners": [(0, 0, 0), (50, 50, 50)]},
 )
 
 # Triclinic cell from lattice vectors
-result = voronota_ltr.compute_tessellation(
+result = compute_tessellation(
     balls=balls,
     probe=1.4,
     periodic_box={"vectors": [(50, 0, 0), (0, 50, 0), (0, 0, 50)]},
@@ -244,7 +247,9 @@ result = voronota_ltr.compute_tessellation(
 With tessellation network output:
 
 ```python
-result = voronota_ltr.compute_tessellation(
+from voronota_ltr import compute_tessellation
+
+result = compute_tessellation(
     balls=balls,
     probe=1.4,
     with_cell_vertices=True,
@@ -253,6 +258,31 @@ result = voronota_ltr.compute_tessellation(
 for vertex in result["cell_vertices"]:
     print(f"Vertex at ({vertex['x']:.2f}, {vertex['y']:.2f}, {vertex['z']:.2f})")
     print(f"  On SAS: {vertex['is_on_sas']}")
+```
+
+### From structure files
+
+Compute tessellation directly from PDB, mmCIF, or XYZR files:
+
+```python
+from voronota_ltr import compute_tessellation_from_file
+
+# Basic usage
+result = compute_tessellation_from_file("structure.pdb", probe=1.4)
+
+# With selections for protein-ligand interface
+result = compute_tessellation_from_file(
+    "complex.pdb",
+    probe=1.4,
+    group_selections=["protein", "resname LIG"],
+)
+
+# Inter-chain contacts only
+result = compute_tessellation_from_file(
+    "dimer.cif",
+    probe=1.4,
+    group_selections=["chain A", "chain B"],
+)
 ```
 
 ## Selection Language

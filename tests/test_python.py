@@ -190,5 +190,92 @@ class TestVoronotaLtr(unittest.TestCase):
             )
 
 
+class TestComputeFromFile(unittest.TestCase):
+    """Test cases for compute_tessellation_from_file."""
+
+    def test_import(self):
+        """Function is exported."""
+        import voronota_ltr
+
+        self.assertTrue(hasattr(voronota_ltr, "compute_tessellation_from_file"))
+
+    def test_pdb_file(self):
+        """Read PDB file."""
+        import os
+        import voronota_ltr
+
+        path = os.path.join(os.path.dirname(__file__), "data", "assembly_1ctf.pdb1")
+        if not os.path.exists(path):
+            self.skipTest("Test file not found")
+
+        result = voronota_ltr.compute_tessellation_from_file(path, probe=1.4)
+        self.assertEqual(result["num_balls"], 492)
+        self.assertEqual(len(result["contacts"]), 3078)
+        self.assertGreater(result["total_sas_area"], 4000)
+
+    def test_mmcif_file(self):
+        """Read mmCIF file."""
+        import os
+        import voronota_ltr
+
+        path = os.path.join(os.path.dirname(__file__), "data", "assembly_1ctf.cif")
+        if not os.path.exists(path):
+            self.skipTest("Test file not found")
+
+        result = voronota_ltr.compute_tessellation_from_file(path, probe=1.4)
+        self.assertEqual(result["num_balls"], 984)
+
+    def test_with_selections(self):
+        """Read file with VMD-like selections."""
+        import os
+        import voronota_ltr
+
+        path = os.path.join(os.path.dirname(__file__), "data", "assembly_1ctf.cif")
+        if not os.path.exists(path):
+            self.skipTest("Test file not found")
+
+        result = voronota_ltr.compute_tessellation_from_file(
+            path, probe=1.4, group_selections=["chain A", "chain A-2"]
+        )
+        # Inter-chain contacts only (fewer than all contacts)
+        self.assertLess(len(result["contacts"]), 6354)
+
+    def test_with_cell_vertices(self):
+        """Request cell vertices from file."""
+        import os
+        import voronota_ltr
+
+        path = os.path.join(os.path.dirname(__file__), "data", "assembly_1ctf.pdb1")
+        if not os.path.exists(path):
+            self.skipTest("Test file not found")
+
+        result = voronota_ltr.compute_tessellation_from_file(
+            path, probe=1.4, with_cell_vertices=True
+        )
+        self.assertIn("cell_vertices", result)
+        self.assertIn("cell_edges", result)
+
+    def test_too_few_selections(self):
+        """Error with fewer than two selections."""
+        import os
+        import voronota_ltr
+
+        path = os.path.join(os.path.dirname(__file__), "data", "assembly_1ctf.pdb1")
+        if not os.path.exists(path):
+            self.skipTest("Test file not found")
+
+        with self.assertRaises(IOError):
+            voronota_ltr.compute_tessellation_from_file(
+                path, probe=1.4, group_selections=["protein"]
+            )
+
+    def test_file_not_found(self):
+        """Error when file doesn't exist."""
+        import voronota_ltr
+
+        with self.assertRaises(IOError):
+            voronota_ltr.compute_tessellation_from_file("nonexistent.pdb", probe=1.4)
+
+
 if __name__ == "__main__":
     unittest.main()
