@@ -52,3 +52,19 @@ jobs:
           components: rustfmt
       - name: Check formatting
         run: cargo fmt --check
+
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Create virtual environment
+        run: python -m venv .venv && . .venv/bin/activate && pip install maturin numpy
+      - name: Build Python module
+        run: . .venv/bin/activate && maturin develop --features python
+      - name: Run Python tests
+        run: . .venv/bin/activate && python -m unittest discover -s tests -p "test_*.py"
