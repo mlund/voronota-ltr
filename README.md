@@ -19,6 +19,7 @@ Outputs inter-atom contact areas, solvent accessible surface (SAS) areas, and vo
 - [x] PDB, mmCIF, and XYZR input formats with auto-detection
 - [x] Unit-tests and benchmarks carried over from the C++ side
 - [x] Python bindings via PyO3
+- [x] Rust API and CLI
 - Based on Voronota-LT v1.1.479 (`f5ad92de4e9723ab767db3e5035c0e7532f31595`)
 
 ## Installation
@@ -189,7 +190,7 @@ Run tests:
 python -m unittest discover -s tests -p "test_*.py"
 ```
 
-Basic usage:
+Basic usage; input balls can be tuples, dicts, or NumPy arrays.
 
 ```python
 from voronota_ltr import compute_tessellation
@@ -206,29 +207,9 @@ for contact in result["contacts"]:
     print(f"Contact {contact['id_a']}-{contact['id_b']}: area={contact['area']:.2f}")
 ```
 
-Input balls can be tuples, dicts, or NumPy arrays:
-
-```python
-from voronota_ltr import compute_tessellation
-import numpy as np
-
-# Tuples
-balls = [(0, 0, 0, 1.5), (3, 0, 0, 1.5)]
-
-# Dicts
-balls = [{"x": 0, "y": 0, "z": 0, "r": 1.5}, {"x": 3, "y": 0, "z": 0, "r": 1.5}]
-
-# NumPy array (N x 4)
-balls = np.array([[0, 0, 0, 1.5], [3, 0, 0, 1.5]])
-
-result = compute_tessellation(balls=balls, probe=1.4)
-```
-
 With periodic boundaries:
 
 ```python
-from voronota_ltr import compute_tessellation
-
 # Orthorhombic box from corner coordinates
 result = compute_tessellation(
     balls=balls,
@@ -247,8 +228,6 @@ result = compute_tessellation(
 With tessellation network output:
 
 ```python
-from voronota_ltr import compute_tessellation
-
 result = compute_tessellation(
     balls=balls,
     probe=1.4,
@@ -270,7 +249,7 @@ from voronota_ltr import compute_tessellation_from_file
 # Basic usage
 result = compute_tessellation_from_file("structure.pdb", probe=1.4)
 
-# With selections for protein-ligand interface
+# VMD-like selections for protein-ligand interface
 result = compute_tessellation_from_file(
     "complex.pdb",
     probe=1.4,
