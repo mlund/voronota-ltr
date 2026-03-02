@@ -190,6 +190,101 @@ class TestVoronotaLtr(unittest.TestCase):
             )
 
 
+class TestComputeSolventSpheres(unittest.TestCase):
+    """Test cases for compute_solvent_spheres."""
+
+    def test_import(self):
+        """Function is exported."""
+        import voronota_ltr
+
+        self.assertTrue(hasattr(voronota_ltr, "compute_solvent_spheres"))
+
+    def test_basic(self):
+        """Compute solvent spheres from two atoms."""
+        import voronota_ltr
+
+        result = voronota_ltr.compute_solvent_spheres(
+            balls=[(0, 0, 0, 1.5), (3, 0, 0, 1.5)],
+            probe=1.4,
+        )
+        self.assertIsInstance(result, list)
+        self.assertGreater(len(result), 0)
+
+        # Check dict structure
+        s = result[0]
+        self.assertIn("x", s)
+        self.assertIn("y", s)
+        self.assertIn("z", s)
+        self.assertIn("radius", s)
+        self.assertIn("weight", s)
+        self.assertIn("parent_index", s)
+
+    def test_single_atom(self):
+        """Single isolated atom produces solvent spheres."""
+        import voronota_ltr
+
+        result = voronota_ltr.compute_solvent_spheres(
+            balls=[(0, 0, 0, 1.5)],
+            probe=1.4,
+            subdivision_depth=0,
+        )
+        self.assertEqual(len(result), 12)  # Depth0 = 12 icosahedron vertices
+        for s in result:
+            self.assertEqual(s["parent_index"], 0)
+            self.assertAlmostEqual(s["radius"], 1.4)
+            self.assertGreater(s["weight"], 0)
+
+    def test_empty_balls(self):
+        """Empty ball list returns empty result."""
+        import voronota_ltr
+
+        result = voronota_ltr.compute_solvent_spheres(balls=[], probe=1.4)
+        self.assertEqual(len(result), 0)
+
+    def test_volume_probe(self):
+        """Volume probe parameter is accepted."""
+        import voronota_ltr
+
+        result = voronota_ltr.compute_solvent_spheres(
+            balls=[(0, 0, 0, 1.5), (5, 0, 0, 1.5)],
+            probe=1.4,
+            volume_probe=0.5,
+            subdivision_depth=0,
+        )
+        self.assertGreater(len(result), 0)
+
+    def test_invalid_probe(self):
+        """Negative probe raises ValueError."""
+        import voronota_ltr
+
+        with self.assertRaises(ValueError):
+            voronota_ltr.compute_solvent_spheres(
+                balls=[(0, 0, 0, 1.5)], probe=-1.0
+            )
+
+    def test_invalid_ball(self):
+        """Ball with negative radius raises ValueError."""
+        import voronota_ltr
+
+        with self.assertRaises(ValueError):
+            voronota_ltr.compute_solvent_spheres(
+                balls=[(0, 0, 0, -1.0)], probe=1.4
+            )
+
+    def test_numpy_input(self):
+        """Balls as numpy array."""
+        import voronota_ltr
+
+        try:
+            import numpy as np
+        except ImportError:
+            self.skipTest("numpy not installed")
+
+        balls = np.array([[0, 0, 0, 1.5], [5, 0, 0, 1.5]])
+        result = voronota_ltr.compute_solvent_spheres(balls=balls, probe=1.4, subdivision_depth=0)
+        self.assertEqual(len(result), 24)
+
+
 class TestComputeFromFile(unittest.TestCase):
     """Test cases for compute_tessellation_from_file."""
 

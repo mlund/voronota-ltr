@@ -11,7 +11,11 @@ use pyo3::types::{PyDict, PyList, PyTuple};
 use std::path::Path;
 
 use crate::input::compute_tessellation_from_file as compute_from_file_rs;
-use crate::{Ball, PeriodicBox, Results, compute_tessellation as compute_tessellation_rs};
+use crate::{
+    Ball, PeriodicBox, Results, SolventSphere, SubdivisionDepth,
+    compute_solvent_spheres as compute_solvent_spheres_rs,
+    compute_tessellation as compute_tessellation_rs,
+};
 
 /// Extract a required f64 key from a Python dict.
 fn extract_f64(dict: &Bound<'_, PyDict>, key: &str) -> PyResult<f64> {
@@ -318,10 +322,74 @@ fn compute_tessellation_from_file<'py>(
     result_to_dict(py, &result)
 }
 
+/// Convert solvent spheres to list of dicts.
+#[allow(clippy::cast_possible_wrap)] // Parent indices won't overflow i64
+fn solvent_spheres_to_list<'py>(
+    py: Python<'py>,
+    spheres: &[SolventSphere],
+) -> PyResult<Bound<'py, PyList>> {
+    let list = PyList::empty(py);
+    for s in spheres {
+        let dict = PyDict::new(py);
+        dict.set_item("x", s.x)?;
+        dict.set_item("y", s.y)?;
+        dict.set_item("z", s.z)?;
+        dict.set_item("radius", s.radius)?;
+        dict.set_item("weight", s.weight)?;
+        dict.set_item("parent_index", s.parent_index as i64)?;
+        list.append(dict)?;
+    }
+    Ok(list)
+}
+
+/// Compute weighted pseudo-solvent spheres around a molecule.
+///
+/// Places solvent-sized spheres on the exposed molecular surface and computes
+/// weights based on available space using a two-stage tessellation algorithm.
+///
+/// # Arguments
+///
+/// * `balls` - Input spheres as:
+///   - List of tuples: `[(x, y, z, r), ...]`
+///   - List of dicts: `[{"x": 0, "y": 0, "z": 0, "r": 1.5}, ...]`
+///   - `NumPy` array: `np.array([[x, y, z, r], ...])`
+/// * `probe` - Rolling probe radius (typically 1.4 for water). Must be non-negative.
+/// * `volume_probe` - Optional probe radius for stage 2 volume calculation. Defaults to 0.0.
+/// * `subdivision_depth` - Icosahedron subdivision depth (0-4). Higher values produce more
+///   sample points: 0=12, 1=42, 2=162, 3=642, 4=2562. Defaults to 2.
+///
+/// # Returns
+///
+/// List of dicts, each containing:
+/// * `x`, `y`, `z` - Sphere center coordinates
+/// * `radius` - Sphere radius (equals probe)
+/// * `weight` - Weight from Voronoi cell volume (larger = more accessible)
+/// * `parent_index` - Index of the parent atom
+#[pyfunction]
+#[pyo3(signature = (balls, probe, volume_probe=None, subdivision_depth=None))]
+fn compute_solvent_spheres<'py>(
+    py: Python<'py>,
+    balls: &Bound<'_, PyAny>,
+    probe: f64,
+    volume_probe: Option<f64>,
+    subdivision_depth: Option<u32>,
+) -> PyResult<Bound<'py, PyList>> {
+    let balls = parse_balls(balls)?;
+    let subdiv = subdivision_depth.map(SubdivisionDepth::from);
+
+    // Release GIL during computation
+    let result = py
+        .detach(|| compute_solvent_spheres_rs(&balls, probe, volume_probe, subdiv))
+        .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+
+    solvent_spheres_to_list(py, &result)
+}
+
 /// Python module definition.
 #[pymodule]
 fn voronota_ltr(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(compute_tessellation, m)?)?;
     m.add_function(wrap_pyfunction!(compute_tessellation_from_file, m)?)?;
+    m.add_function(wrap_pyfunction!(compute_solvent_spheres, m)?)?;
     Ok(())
 }

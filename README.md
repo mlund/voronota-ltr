@@ -264,6 +264,24 @@ result = compute_tessellation_from_file(
 )
 ```
 
+### Solvent spheres
+
+Generate weighted pseudo-solvent spheres on the exposed molecular surface:
+
+```python
+from voronota_ltr import compute_solvent_spheres
+
+spheres = compute_solvent_spheres(
+    balls=[(0, 0, 0, 1.5), (3, 0, 0, 1.5)],
+    probe=1.4,
+    subdivision_depth=2,  # 0-4, controls sampling density (default: 2)
+)
+
+for s in spheres:
+    print(f"Sphere at ({s['x']:.2f}, {s['y']:.2f}, {s['z']:.2f}), "
+          f"weight={s['weight']:.3f}, parent={s['parent_index']}")
+```
+
 ## Selection Language
 
 The `-s/--selection` flag accepts VMD-like selection syntax for defining atom groups.
