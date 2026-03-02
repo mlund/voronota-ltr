@@ -174,7 +174,13 @@ This creates three CGO objects: `contacts_balls` (cyan spheres), `contacts_faces
 
 ## Python Interface
 
-Build and install locally using [maturin](https://www.maturin.rs/):
+Install directly from GitHub (requires a [Rust toolchain](https://rustup.rs/)):
+
+```sh
+pip install git+https://github.com/mlund/voronota-ltr.git
+```
+
+For local development, build and install using [maturin](https://www.maturin.rs/):
 
 ```sh
 pip install maturin
@@ -182,7 +188,7 @@ maturin develop --features python          # Development build
 maturin develop --features python --release  # Optimized build
 ```
 
-This installs both the Python module and CLI binary.
+Both methods install the Python module and CLI binary.
 
 Run tests:
 
