@@ -14,13 +14,16 @@ Outputs inter-atom contact areas, solvent accessible surface (SAS) areas, and vo
 - [x] Updateable tessellation for incremental updates (stateful)
 - [x] Periodic boundaries
 - [x] Per atom SASA and volume
+- [x] Contacts-only mode (skips cells/SAS/volumes for ~30–50% speedup)
 - [x] Groupings to avoid internal contacts
 - [x] Parallel processing using Rayon - see benchmarks below
 - [x] PDB, mmCIF, and XYZR input formats with auto-detection
 - [x] Unit-tests and benchmarks carried over from the C++ side
 - [x] Python bindings via PyO3
 - [x] Rust API and CLI
-- Based on Voronota-LT v1.1.479 (`f5ad92de4e9723ab767db3e5035c0e7532f31595`)
+- Based on Voronota-LT v1.1.479 — reviewed against v1.1.492; all upstream bug fixes
+  are already incorporated and new features (preliminary cutting planes, CAD-score-LT)
+  are CLI-level additions not relevant to the core tessellation library
 
 ## Installation
 
@@ -54,6 +57,29 @@ let total_sas: f64 = result.total_sas_area();
 // Detailed contact and cell data
 for contact in &result.contacts {
     println!("Contact {}-{}: area={:.2}", contact.id_a, contact.id_b, contact.area);
+}
+```
+
+### Contacts only (no cells/SAS/volumes)
+
+When only contact areas are needed (e.g. for contact energy calculations),
+`compute_contacts_only` skips solid angle, volume, and cell computation:
+
+```rust
+use voronota_ltr::{Ball, compute_contacts_only};
+
+let balls = vec![
+    Ball::new(0.0, 0.0, 0.0, 1.5),
+    Ball::new(3.0, 0.0, 0.0, 1.5),
+    Ball::new(1.5, 2.5, 0.0, 1.5),
+];
+
+// Optional group IDs to restrict to inter-group contacts
+let groups = vec![0, 0, 1];
+let contacts = compute_contacts_only(&balls, 1.4, None, Some(&groups));
+
+for c in &contacts {
+    println!("Contact {}-{}: area={:.2}", c.id_a, c.id_b, c.area);
 }
 ```
 
