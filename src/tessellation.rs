@@ -52,6 +52,8 @@ struct CollisionContext {
     searcher: SpheresSearcher,
     all_collisions: Vec<Vec<ValuedId>>,
     collision_pairs: Vec<(usize, usize)>,
+    /// Original (non-populated) spheres, needed for cell computation in periodic mode.
+    input_spheres: Vec<Sphere>,
     /// Number of original spheres (before periodic images).
     n: usize,
     periodic: bool,
@@ -59,9 +61,12 @@ struct CollisionContext {
 
 impl CollisionContext {
     fn new_standard(balls: &[Ball], probe: f64, groups: Option<&[i32]>) -> Self {
-        let spheres: Vec<Sphere> = balls.iter().map(|b| Sphere::from_ball(b, probe)).collect();
-        let n = spheres.len();
-        let searcher = SpheresSearcher::new(spheres);
+        let input_spheres: Vec<Sphere> =
+            balls.iter().map(|b| Sphere::from_ball(b, probe)).collect();
+        let n = input_spheres.len();
+        // Clone needed: SpheresSearcher takes ownership, but we keep input_spheres
+        // for compute_cells which needs the original (non-populated) radii
+        let searcher = SpheresSearcher::new(input_spheres.clone());
         let all_collisions: Vec<Vec<ValuedId>> = (0..n)
             .into_par_iter()
             .map(|id| searcher.find_colliding_ids(id, true).colliding_ids)
@@ -71,6 +76,7 @@ impl CollisionContext {
             searcher,
             all_collisions,
             collision_pairs,
+            input_spheres,
             n,
             periodic: false,
         }
@@ -85,6 +91,7 @@ impl CollisionContext {
         let input_spheres: Vec<Sphere> =
             balls.iter().map(|b| Sphere::from_ball(b, probe)).collect();
         let n = input_spheres.len();
+        // 27 periodic images (3×3×3) so contacts across box boundaries are detected
         let populated_spheres = pbox.populate_periodic_spheres(&input_spheres);
         let searcher = SpheresSearcher::new(populated_spheres);
         let all_collisions: Vec<Vec<ValuedId>> = (0..n)
@@ -96,6 +103,7 @@ impl CollisionContext {
             searcher,
             all_collisions,
             collision_pairs,
+            input_spheres,
             n,
             periodic: true,
         }
@@ -139,7 +147,8 @@ pub fn compute_contacts_only(
                 b_id,
                 &ctx.all_collisions[a_id],
             )?;
-            (area > 0.0).then_some(Contact {
+            // clip_contact already filters area <= 0, so area is always positive here
+            Some(Contact {
                 id_a: a_id,
                 id_b: b_id,
                 area,
@@ -156,6 +165,9 @@ pub fn compute_contacts_only(
 }
 
 /// Deduplicate periodic contacts and canonicalize IDs to `[0, n)`.
+///
+/// Periodic images can produce duplicate contacts for the same canonical atom pair
+/// (e.g., atom 0 with image 2+n). We keep the first occurrence per canonical pair.
 fn deduplicate_and_canonicalize_contacts(contacts: Vec<Contact>, n: usize) -> Vec<Contact> {
     use std::collections::HashMap;
     let mut seen: HashMap<(usize, usize), Contact> = HashMap::new();
@@ -192,25 +204,17 @@ fn compute_standard(
         return TessellationResult::default();
     }
 
-    let spheres: Vec<Sphere> = balls.iter().map(|b| Sphere::from_ball(b, probe)).collect();
-    let searcher = SpheresSearcher::new(spheres);
-    let spheres = searcher.spheres();
+    let ctx = CollisionContext::new_standard(balls, probe, groups);
 
-    let all_collisions: Vec<Vec<ValuedId>> = (0..spheres.len())
-        .into_par_iter()
-        .map(|id| searcher.find_colliding_ids(id, true).colliding_ids)
-        .collect();
-
-    let collision_pairs = collect_collision_pairs(&all_collisions, groups, None);
-
-    let contact_results: Vec<Option<ContactWithTessellation>> = collision_pairs
+    let contact_results: Vec<Option<ContactWithTessellation>> = ctx
+        .collision_pairs
         .par_iter()
         .map(|&(a_id, b_id)| {
             let cd = construct_contact_descriptor(
-                searcher.spheres(),
+                ctx.searcher.spheres(),
                 a_id,
                 b_id,
-                &all_collisions[a_id],
+                &ctx.all_collisions[a_id],
             )?;
             let mut summary = cd.to_summary();
             summary.ensure_ids_ordered();
@@ -248,7 +252,12 @@ fn compute_standard(
     let valid_summaries: Vec<ContactDescriptorSummary> =
         valid_results.iter().map(|r| r.summary.clone()).collect();
 
-    let cells = compute_cells(&valid_summaries, searcher.spheres(), &all_collisions, None);
+    let cells = compute_cells(
+        &valid_summaries,
+        &ctx.input_spheres,
+        &ctx.all_collisions,
+        None,
+    );
 
     let (cell_vertices, cell_edges) = if with_cell_vertices {
         assemble_tessellation_network(&valid_results, None)
@@ -407,40 +416,20 @@ fn compute_periodic(
         return TessellationResult::default();
     }
 
-    let n = balls.len();
-
-    // Convert balls to spheres (keep copy for cell computation)
-    let input_spheres: Vec<Sphere> = balls.iter().map(|b| Sphere::from_ball(b, probe)).collect();
-
-    // Create 27 periodic images and build spatial index
-    let populated_spheres = periodic_box.populate_periodic_spheres(&input_spheres);
-    debug!(
-        "Created {} periodic images from {} input spheres",
-        populated_spheres.len(),
-        n
-    );
-    let searcher = SpheresSearcher::new(populated_spheres);
-
-    // Find collisions for original spheres only (indices 0..n)
-    let all_collisions: Vec<Vec<ValuedId>> = (0..n)
-        .into_par_iter()
-        .map(|id| searcher.find_colliding_ids(id, true).colliding_ids)
-        .collect();
-
-    // Collect collision pairs (includes potential duplicates for boundary contacts)
-    let collision_pairs = collect_collision_pairs(&all_collisions, groups, Some(n));
+    let ctx = CollisionContext::new_periodic(balls, probe, periodic_box, groups);
+    let n = ctx.n;
 
     // Construct contact descriptors in parallel
-    // Keep ORIGINAL IDs in summary - do NOT canonicalize until after deduplication
-    // This matches C++ behavior where ensure_ids_ordered() just orders, not canonicalizes
-    let contact_results: Vec<Option<ContactWithTessellation>> = collision_pairs
+    // Keep ORIGINAL IDs in summary — do NOT canonicalize until after deduplication
+    let contact_results: Vec<Option<ContactWithTessellation>> = ctx
+        .collision_pairs
         .par_iter()
         .map(|&(a_id, b_id)| {
             let cd = construct_contact_descriptor(
-                searcher.spheres(),
+                ctx.searcher.spheres(),
                 a_id,
                 b_id,
-                &all_collisions[a_id],
+                &ctx.all_collisions[a_id],
             )?;
             let mut summary = cd.to_summary();
             // Keep ORIGINAL IDs (b_id may be >= n for periodic images)
@@ -474,12 +463,13 @@ fn compute_periodic(
         .map(|r| r.summary.clone())
         .collect();
 
-    // Compute cells using ALL contacts (including boundary duplicates)
-    // Pass Some(n) so only canonical IDs (< n) receive contributions
+    // Compute cells using ALL contacts (including boundary duplicates).
+    // Pass Some(n) so only canonical IDs (< n) receive contributions.
+    // Uses input_spheres (not populated) for correct per-atom radii.
     let cells = compute_cells(
         &all_valid_summaries,
-        &input_spheres,
-        &all_collisions,
+        &ctx.input_spheres,
+        &ctx.all_collisions,
         Some(n),
     );
 

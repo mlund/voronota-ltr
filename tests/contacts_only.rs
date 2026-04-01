@@ -117,10 +117,10 @@ fn contacts_only_no_overlap() {
 #[test]
 fn contacts_only_two_body_reference() {
     let balls = vec![
-        Ball::new(0.0, 0.0, 0.0, 1.5), // mol1 atom A
-        Ball::new(1.0, 0.0, 0.0, 1.5), // mol1 atom A
-        Ball::new(4.0, 0.0, 0.0, 2.0), // mol2 atom B
-        Ball::new(5.0, 0.0, 0.0, 2.0), // mol2 atom B
+        Ball::new(0.0, 0.0, 0.0, 1.5), // mol1, r=1.5
+        Ball::new(1.0, 0.0, 0.0, 1.5), // mol1, r=1.5
+        Ball::new(4.0, 0.0, 0.0, 2.0), // mol2, r=2.0
+        Ball::new(5.0, 0.0, 0.0, 2.0), // mol2, r=2.0
     ];
     let groups = vec![0, 0, 1, 1];
     let contacts = compute_contacts_only(&balls, 1.4, None, Some(&groups));
