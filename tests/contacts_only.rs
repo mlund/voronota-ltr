@@ -111,3 +111,26 @@ fn contacts_only_no_overlap() {
     let contacts = compute_contacts_only(&balls, 1.4, None, None);
     assert!(contacts.is_empty());
 }
+
+/// Reference geometry for faunus contact tessellation integration test.
+/// Two molecules, each with 2 atoms, with inter-body contact.
+#[test]
+fn contacts_only_two_body_reference() {
+    let balls = vec![
+        Ball::new(0.0, 0.0, 0.0, 1.5), // mol1 atom A
+        Ball::new(1.0, 0.0, 0.0, 1.5), // mol1 atom A
+        Ball::new(4.0, 0.0, 0.0, 2.0), // mol2 atom B
+        Ball::new(5.0, 0.0, 0.0, 2.0), // mol2 atom B
+    ];
+    let groups = vec![0, 0, 1, 1];
+    let contacts = compute_contacts_only(&balls, 1.4, None, Some(&groups));
+
+    assert_eq!(contacts.len(), 1, "expected exactly one inter-body contact");
+    assert_eq!(contacts[0].id_a, 1);
+    assert_eq!(contacts[0].id_b, 2);
+    assert!(
+        (contacts[0].area - 23.434_317_700_371_36).abs() < 1e-6,
+        "unexpected area: {}",
+        contacts[0].area
+    );
+}
