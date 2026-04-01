@@ -56,7 +56,7 @@ pub use graphics::GraphicsWriter;
 pub use input::{FileComputeError, compute_tessellation_from_file};
 pub use solvent_spheres::{SolventSphere, SolventSpheresError, compute_solvent_spheres};
 pub use subdivided_icosahedron::SubdivisionDepth;
-pub use tessellation::compute_tessellation;
+pub use tessellation::{compute_contacts_only, compute_tessellation};
 pub use types::{
     Ball, Cell, CellEdge, CellVertex, Contact, PeriodicBox, Results, TessellationResult,
 };
