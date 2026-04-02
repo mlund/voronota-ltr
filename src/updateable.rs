@@ -459,9 +459,9 @@ impl UpdateableTessellation {
         self.state.result.contacts_by_sphere = vec![Vec::new(); n];
         for cds in &deduped_summaries {
             if cds.area > 0.0 {
-                self.state.result.contacts_by_sphere[cds.id_a].push(cds.clone());
+                self.state.result.contacts_by_sphere[cds.id_a].push(*cds);
                 if cds.id_b != cds.id_a {
-                    self.state.result.contacts_by_sphere[cds.id_b].push(cds.clone());
+                    self.state.result.contacts_by_sphere[cds.id_b].push(*cds);
                 }
             }
         }
@@ -499,9 +499,9 @@ impl UpdateableTessellation {
         // Add new contacts
         for cds in &new_contacts {
             if cds.area > 0.0 {
-                self.state.result.contacts_by_sphere[cds.id_a].push(cds.clone());
+                self.state.result.contacts_by_sphere[cds.id_a].push(*cds);
                 if cds.id_b != cds.id_a {
-                    self.state.result.contacts_by_sphere[cds.id_b].push(cds.clone());
+                    self.state.result.contacts_by_sphere[cds.id_b].push(*cds);
                 }
             }
         }

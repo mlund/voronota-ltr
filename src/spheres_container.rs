@@ -13,6 +13,7 @@ use crate::spheres_searcher::SpheresSearcher;
 use crate::types::{PeriodicBox, Sphere, ValuedId};
 
 /// Result of an update operation
+#[derive(Debug)]
 pub struct UpdateResult {
     /// IDs of spheres that were changed
     pub changed_ids: Vec<usize>,

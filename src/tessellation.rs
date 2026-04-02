@@ -250,7 +250,7 @@ fn compute_standard(
         .collect();
 
     let valid_summaries: Vec<ContactDescriptorSummary> =
-        valid_results.iter().map(|r| r.summary.clone()).collect();
+        valid_results.iter().map(|r| r.summary).collect();
 
     let cells = compute_cells(
         &valid_summaries,
@@ -458,10 +458,8 @@ fn compute_periodic(
         .filter(|r| r.summary.area > 0.0)
         .collect();
 
-    let all_valid_summaries: Vec<ContactDescriptorSummary> = all_valid_results
-        .iter()
-        .map(|r| r.summary.clone())
-        .collect();
+    let all_valid_summaries: Vec<ContactDescriptorSummary> =
+        all_valid_results.iter().map(|r| r.summary).collect();
 
     // Compute cells using ALL contacts (including boundary duplicates).
     // Pass Some(n) so only canonical IDs (< n) receive contributions.
@@ -546,7 +544,7 @@ pub fn deduplicate_periodic_contacts_ref(
         .iter()
         .enumerate()
         .filter(|(i, _)| canonical_ids[*i] == *i)
-        .map(|(_, s)| s.clone())
+        .map(|(_, s)| *s)
         .collect()
 }
 

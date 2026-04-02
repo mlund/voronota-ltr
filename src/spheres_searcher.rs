@@ -102,6 +102,7 @@ impl GridParameters {
 }
 
 /// Result of collision search for a single sphere.
+#[derive(Debug)]
 pub struct CollisionResult {
     /// IDs and distances of spheres colliding with the query sphere.
     pub colliding_ids: Vec<ValuedId>,

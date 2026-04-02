@@ -64,7 +64,7 @@ impl Sphere {
 }
 
 /// Contact area between two neighboring spheres.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Contact {
     /// Index of first sphere (always less than `id_b`).
@@ -78,7 +78,7 @@ pub struct Contact {
 }
 
 /// Voronoi cell properties for a sphere.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Cell {
     /// Index of the sphere this cell belongs to.
@@ -371,7 +371,7 @@ impl PeriodicBox {
 }
 
 /// Internal contact descriptor summary (matches C++ `ContactDescriptorSummary`).
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Copy, Default)]
 pub struct ContactDescriptorSummary {
     /// Contact area between the two spheres.
     pub area: f64,

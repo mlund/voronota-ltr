@@ -32,6 +32,12 @@ impl std::error::Error for SelectionError {}
 #[derive(Debug, Clone)]
 pub struct GlobPattern(String);
 
+impl From<&str> for GlobPattern {
+    fn from(s: &str) -> Self {
+        Self(s.to_string())
+    }
+}
+
 impl GlobPattern {
     /// Create a new glob pattern.
     #[must_use]

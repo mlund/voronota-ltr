@@ -391,7 +391,7 @@ mod tests {
     /// Test 3 balls in a line - should produce 2 faces
     #[test]
     fn test_three_balls_line_graphics() {
-        let balls = vec![
+        let balls = [
             Ball::new(0.0, 0.0, 0.0, 1.0),
             Ball::new(0.5, 0.0, 0.0, 1.0),
             Ball::new(1.0, 0.0, 0.0, 1.0),
@@ -409,20 +409,19 @@ mod tests {
             .collect();
 
         let mut face_count = 0;
-        for a_id in 0..3 {
-            for neighbor in &all_collisions[a_id] {
+        for (a_id, collisions) in all_collisions.iter().enumerate() {
+            for neighbor in collisions {
                 let b_id = neighbor.index;
-                if a_id < b_id {
-                    if let Some(cd) = crate::contact::construct_contact_descriptor(
+                if a_id < b_id
+                    && let Some(cd) = crate::contact::construct_contact_descriptor(
                         searcher.spheres(),
                         a_id,
                         b_id,
-                        &all_collisions[a_id],
-                    ) {
-                        if cd.to_graphics(0.5).is_some() {
-                            face_count += 1;
-                        }
-                    }
+                        collisions,
+                    )
+                    && cd.to_graphics(0.5).is_some()
+                {
+                    face_count += 1;
                 }
             }
         }
