@@ -23,6 +23,7 @@ pub struct UpdateResult {
 }
 
 /// Manages sphere state including periodic images and collision detection.
+#[derive(Clone)]
 pub struct SpheresContainer {
     spheres: Vec<Sphere>,
     periodic_box: Option<PeriodicBox>,
@@ -240,29 +241,13 @@ impl SpheresContainer {
         self.periodic_box.as_ref()
     }
 
-    /// Clone this container's state for backup purposes.
-    pub fn clone_state(&self) -> Self {
-        Self {
-            spheres: self.spheres.clone(),
-            periodic_box: self.periodic_box,
-            populated_spheres: self.populated_spheres.clone(),
-            exclusion_statuses: self.exclusion_statuses.clone(),
-            colliding_ids: self.colliding_ids.clone(),
-            total_collisions: self.total_collisions,
-            searcher: self
-                .searcher
-                .as_ref()
-                .map(super::spheres_searcher::SpheresSearcher::clone_for_backup),
-        }
-    }
-
     /// Restore state from a backup for a subset of sphere IDs.
     pub fn restore_from(&mut self, backup: &Self, affected_ids: &[usize]) {
         if affected_ids.is_empty()
             || self.spheres.len() != backup.spheres.len()
             || affected_ids.len() > self.size_threshold_for_full_reinit()
         {
-            *self = backup.clone_state();
+            *self = backup.clone();
             return;
         }
 
@@ -270,7 +255,7 @@ impl SpheresContainer {
 
         for &id in affected_ids {
             if id >= n {
-                *self = backup.clone_state();
+                *self = backup.clone();
                 return;
             }
         }
@@ -295,7 +280,7 @@ impl SpheresContainer {
 
         self.total_collisions = backup.total_collisions;
         if let Some(ref backup_searcher) = backup.searcher {
-            self.searcher = Some(backup_searcher.clone_for_backup());
+            self.searcher = Some(backup_searcher.clone());
         }
     }
 

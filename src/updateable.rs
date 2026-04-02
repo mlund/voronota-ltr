@@ -98,6 +98,7 @@ impl crate::types::Results for UpdateableResult {
 }
 
 /// Internal state for `UpdateableTessellation`.
+#[derive(Clone)]
 struct State {
     container: SpheresContainer,
     result: UpdateableResult,
@@ -147,6 +148,7 @@ impl State {
 /// let summary = tess.summary();
 /// println!("Total contacts: {}", summary.contacts.len());
 /// ```
+#[derive(Clone)]
 pub struct UpdateableTessellation {
     state: State,
     backup: Option<State>,
@@ -400,7 +402,7 @@ impl UpdateableTessellation {
         // Save current state as backup if backup is enabled and result exists
         if self.backup_enabled && !self.state.result.is_empty() {
             self.backup = Some(State {
-                container: self.state.container.clone_state(),
+                container: self.state.container.clone(),
                 result: self.state.result.clone(),
                 cell_summaries: self.state.cell_summaries.clone(),
                 changed_ids: self.state.changed_ids.clone(),

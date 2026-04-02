@@ -110,6 +110,7 @@ pub struct CollisionResult {
 }
 
 /// Grid-based spatial index for finding sphere collisions
+#[derive(Clone)]
 pub struct SpheresSearcher {
     spheres: Vec<Sphere>,
     grid_params: GridParameters,
@@ -169,16 +170,6 @@ impl SpheresSearcher {
                     self.add_sphere_to_grid(id);
                 }
             }
-        }
-    }
-
-    /// Clone for backup purposes.
-    pub fn clone_for_backup(&self) -> Self {
-        Self {
-            spheres: self.spheres.clone(),
-            grid_params: self.grid_params.clone(),
-            map_of_boxes: self.map_of_boxes.clone(),
-            boxes: self.boxes.clone(),
         }
     }
 
