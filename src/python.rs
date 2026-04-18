@@ -357,6 +357,9 @@ fn solvent_spheres_to_list<'py>(
 /// * `volume_probe` - Optional probe radius for stage 2 volume calculation. Defaults to 0.0.
 /// * `subdivision_depth` - Icosahedron subdivision depth (0-4). Higher values produce more
 ///   sample points: 0=12, 1=42, 2=162, 3=642, 4=2562. Defaults to 2.
+/// * `periodic_box` - Optional periodic boundary conditions as dict:
+///   - `{"corners": [(x1,y1,z1), (x2,y2,z2)]}` for orthorhombic box
+///   - `{"vectors": [(ax,ay,az), (bx,by,bz), (cx,cy,cz)]}` for triclinic cell
 ///
 /// # Returns
 ///
@@ -366,20 +369,22 @@ fn solvent_spheres_to_list<'py>(
 /// * `weight` - Weight from Voronoi cell volume (larger = more accessible)
 /// * `parent_index` - Index of the parent atom
 #[pyfunction]
-#[pyo3(signature = (balls, probe, volume_probe=None, subdivision_depth=None))]
+#[pyo3(signature = (balls, probe, volume_probe=None, subdivision_depth=None, periodic_box=None))]
 fn compute_solvent_spheres<'py>(
     py: Python<'py>,
     balls: &Bound<'_, PyAny>,
     probe: f64,
     volume_probe: Option<f64>,
     subdivision_depth: Option<u32>,
+    periodic_box: Option<&Bound<'_, PyAny>>,
 ) -> PyResult<Bound<'py, PyList>> {
     let balls = parse_balls(balls)?;
     let subdiv = subdivision_depth.map(SubdivisionDepth::from);
+    let pbox = periodic_box.map(parse_periodic_box).transpose()?;
 
     // Release GIL during computation
     let result = py
-        .detach(|| compute_solvent_spheres_rs(&balls, probe, volume_probe, subdiv))
+        .detach(|| compute_solvent_spheres_rs(&balls, probe, volume_probe, subdiv, pbox.as_ref()))
         .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
 
     solvent_spheres_to_list(py, &result)

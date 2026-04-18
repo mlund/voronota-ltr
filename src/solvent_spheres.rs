@@ -10,7 +10,7 @@ use nalgebra::Point3;
 
 use crate::subdivided_icosahedron::{SubdividedIcosahedron, SubdivisionDepth};
 use crate::tessellation::compute_tessellation;
-use crate::types::{Ball, TessellationResult};
+use crate::types::{Ball, PeriodicBox, TessellationResult};
 
 /// A pseudo-solvent sphere representing where a solvent molecule could sit on the molecular surface.
 #[derive(Debug, Clone, PartialEq)]
@@ -121,7 +121,7 @@ impl std::error::Error for SolventSpheresError {}
 ///     Ball::new(3.0, 0.0, 0.0, 1.5),
 /// ];
 ///
-/// let solvent = compute_solvent_spheres(&atoms, 1.4, None, None).unwrap();
+/// let solvent = compute_solvent_spheres(&atoms, 1.4, None, None, None).unwrap();
 ///
 /// for s in &solvent {
 ///     println!("Solvent at ({:.2}, {:.2}, {:.2}), weight={:.3}, parent={}",
@@ -133,6 +133,7 @@ pub fn compute_solvent_spheres(
     probe: f64,
     volume_probe: Option<f64>,
     subdivision_depth: Option<SubdivisionDepth>,
+    periodic_box: Option<&PeriodicBox>,
 ) -> Result<Vec<SolventSphere>, SolventSpheresError> {
     let volume_probe = volume_probe.unwrap_or(0.0);
     let subdivision_depth = subdivision_depth.unwrap_or(SubdivisionDepth::Depth2);
@@ -145,7 +146,7 @@ pub fn compute_solvent_spheres(
     }
 
     // Stage 1: tessellate to find contacts and exposed surfaces
-    let stage1_result = compute_tessellation(balls, probe, None, None, false);
+    let stage1_result = compute_tessellation(balls, probe, periodic_box, None, false);
     let neighbors = build_neighbor_graph(balls, &stage1_result);
 
     // Generate pseudo-solvent spheres by sampling exposed surfaces
@@ -162,6 +163,7 @@ pub fn compute_solvent_spheres(
         solvent_spheres,
         probe,
         volume_probe,
+        periodic_box,
     ))
 }
 
@@ -292,6 +294,7 @@ fn compute_solvent_weights(
     solvent_spheres: Vec<SolventSphere>,
     probe: f64,
     volume_probe: f64,
+    periodic_box: Option<&PeriodicBox>,
 ) -> Vec<SolventSphere> {
     let num_original = balls.len();
     let mut combined = Vec::with_capacity(num_original + solvent_spheres.len());
@@ -316,7 +319,7 @@ fn compute_solvent_weights(
         ));
     }
 
-    let stage2_result = compute_tessellation(&combined, 0.0, None, None, false);
+    let stage2_result = compute_tessellation(&combined, 0.0, periodic_box, None, false);
 
     // Map cell index to volume for O(1) lookup
     let cell_volumes: std::collections::HashMap<usize, f64> = stage2_result
@@ -351,7 +354,8 @@ mod tests {
         let balls = vec![Ball::new(0.0, 0.0, 0.0, 1.5)];
 
         let solvent =
-            compute_solvent_spheres(&balls, 1.4, None, Some(SubdivisionDepth::Depth0)).unwrap();
+            compute_solvent_spheres(&balls, 1.4, None, Some(SubdivisionDepth::Depth0), None)
+                .unwrap();
 
         // Single isolated sphere should have all sample points valid (12 for Depth0)
         assert_eq!(solvent.len(), 12);
@@ -371,7 +375,8 @@ mod tests {
         ];
 
         let solvent =
-            compute_solvent_spheres(&balls, 1.4, None, Some(SubdivisionDepth::Depth0)).unwrap();
+            compute_solvent_spheres(&balls, 1.4, None, Some(SubdivisionDepth::Depth0), None)
+                .unwrap();
 
         // Contact area means some sample points fail the distance test
         assert!(
@@ -383,7 +388,7 @@ mod tests {
 
     #[test]
     fn empty_input() {
-        let solvent = compute_solvent_spheres(&[], 1.4, None, None).unwrap();
+        let solvent = compute_solvent_spheres(&[], 1.4, None, None, None).unwrap();
         assert!(solvent.is_empty());
     }
 
@@ -394,7 +399,7 @@ mod tests {
         let balls = vec![Ball::new(0.0, 0.0, 0.0, 1.5), Ball::new(5.0, 0.0, 0.0, 1.5)];
 
         let solvent =
-            compute_solvent_spheres(&balls, 1.4, Some(0.0), Some(SubdivisionDepth::Depth0))
+            compute_solvent_spheres(&balls, 1.4, Some(0.0), Some(SubdivisionDepth::Depth0), None)
                 .unwrap();
 
         // C++ produces 24 solvent spheres (12 per ball)
@@ -428,7 +433,8 @@ mod tests {
         ];
 
         let solvent =
-            compute_solvent_spheres(&balls, 1.4, None, Some(SubdivisionDepth::Depth0)).unwrap();
+            compute_solvent_spheres(&balls, 1.4, None, Some(SubdivisionDepth::Depth0), None)
+                .unwrap();
 
         // Both spheres contribute, but outer sphere should dominate
         let outer_count = solvent.iter().filter(|s| s.parent_index == 0).count();
@@ -443,7 +449,7 @@ mod tests {
     fn invalid_probe_returns_error() {
         let balls = vec![Ball::new(0.0, 0.0, 0.0, 1.5)];
         assert!(matches!(
-            compute_solvent_spheres(&balls, -1.0, None, None),
+            compute_solvent_spheres(&balls, -1.0, None, None, None),
             Err(SolventSpheresError::InvalidProbe(_))
         ));
     }
@@ -452,7 +458,7 @@ mod tests {
     fn nan_probe_returns_error() {
         let balls = vec![Ball::new(0.0, 0.0, 0.0, 1.5)];
         assert!(matches!(
-            compute_solvent_spheres(&balls, f64::NAN, None, None),
+            compute_solvent_spheres(&balls, f64::NAN, None, None, None),
             Err(SolventSpheresError::InvalidProbe(_))
         ));
     }
@@ -461,7 +467,7 @@ mod tests {
     fn invalid_ball_returns_error() {
         let balls = vec![Ball::new(0.0, 0.0, 0.0, -1.0)]; // Negative radius
         assert!(matches!(
-            compute_solvent_spheres(&balls, 1.4, None, None),
+            compute_solvent_spheres(&balls, 1.4, None, None, None),
             Err(SolventSpheresError::InvalidBall { .. })
         ));
     }
@@ -470,7 +476,7 @@ mod tests {
     fn nan_coordinates_returns_error() {
         let balls = vec![Ball::new(f64::NAN, 0.0, 0.0, 1.5)];
         assert!(matches!(
-            compute_solvent_spheres(&balls, 1.4, None, None),
+            compute_solvent_spheres(&balls, 1.4, None, None, None),
             Err(SolventSpheresError::InvalidBall { .. })
         ));
     }
