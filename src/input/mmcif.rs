@@ -31,6 +31,7 @@ enum Field {
     CartnY,
     CartnZ,
     TypeSymbol,
+    BIsoOrEquiv,
 }
 
 /// Map mmCIF field names to our Field enum.
@@ -53,6 +54,7 @@ fn field_from_name(name: &str) -> Option<Field> {
         "Cartn_y" => Some(Field::CartnY),
         "Cartn_z" => Some(Field::CartnZ),
         "type_symbol" => Some(Field::TypeSymbol),
+        "B_iso_or_equiv" => Some(Field::BIsoOrEquiv),
         _ => None,
     }
 }
@@ -254,6 +256,9 @@ fn parse_atom_row(row: &[String], field_map: &HashMap<Field, usize>) -> Option<A
         y,
         z,
         element: fix_undefined(get_value(row, field_map, Field::TypeSymbol, None)),
+        b_factor: get_value(row, field_map, Field::BIsoOrEquiv, None)
+            .parse()
+            .unwrap_or(0.0),
     })
 }
 

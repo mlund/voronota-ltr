@@ -51,6 +51,8 @@ pub struct AtomRecord {
     pub z: f64,
     /// Element symbol (e.g., "C", "N", "O").
     pub element: String,
+    /// Temperature (B-) factor, in Å²; `0.0` when the input provides none.
+    pub b_factor: f64,
 }
 
 /// Input file format.
@@ -620,6 +622,7 @@ mod tests {
             y: 0.0,
             z: 0.0,
             element: "C".to_string(),
+            b_factor: 0.0,
         }
     }
 

@@ -97,6 +97,7 @@ fn parse_atom_line(line: &str) -> Option<AtomRecord> {
         y,
         z,
         element: fix_undefined(extract_column(line, 77, 78)),
+        b_factor: parse_column_f64(line, 61, 66).unwrap_or(0.0),
     })
 }
 
@@ -216,5 +217,17 @@ END
         assert_eq!(extract_column(line, 1, 6), "ATOM");
         assert_eq!(extract_column(line, 13, 16), "CA");
         assert_eq!(extract_column(line, 18, 20), "ALA");
+    }
+
+    #[test]
+    fn parses_b_factor() {
+        let line = "ATOM      1  N   MET A   1       0.000   0.000   0.000  1.00 49.05           N";
+        assert_eq!(parse_atom_line(line).unwrap().b_factor, 49.05);
+    }
+
+    #[test]
+    fn missing_b_factor_defaults_to_zero() {
+        let line = "ATOM      1  CA  ALA A   1       1.000   2.000   3.000";
+        assert_eq!(parse_atom_line(line).unwrap().b_factor, 0.0);
     }
 }

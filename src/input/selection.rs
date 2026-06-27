@@ -847,6 +847,7 @@ mod tests {
             y: 0.0,
             z: 0.0,
             element: String::new(),
+            b_factor: 0.0,
         }
     }
 
@@ -864,6 +865,7 @@ mod tests {
             y: 0.0,
             z: 0.0,
             element: String::new(),
+            b_factor: 0.0,
         }
     }
 
