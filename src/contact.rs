@@ -105,6 +105,11 @@ impl ContactDescriptor {
             distance: self.distance,
             id_a: self.id_a,
             id_b: self.id_b,
+            central: contour_is_central(
+                self.intersection_circle.center,
+                &self.contour,
+                self.contour_barycenter,
+            ),
         }
     }
 
@@ -384,12 +389,58 @@ pub(crate) fn construct_contact_area(
     a_id: usize,
     b_id: usize,
     neighbors: &[ValuedId],
-) -> Option<(f64, f64)> {
+) -> Option<(f64, f64, bool)> {
     let clipped = clip_contact(spheres, a_id, b_id, neighbors)?;
+    let central = contour_is_central(
+        clipped.intersection_circle.center,
+        &clipped.contour,
+        clipped.contour_barycenter,
+    );
     Some((
         clipped.area,
         clipped.sum_of_arc_angles * clipped.intersection_circle.r,
+        central,
     ))
+}
+
+/// Whether a contact contour is *central* — it encloses the projection of the
+/// intersection-circle centre. A direct port of voronota-lt's
+/// `check_if_contour_is_central` (`radical_tessellation_contact_construction.h`),
+/// matching its `FLOATEPSILON = 1e-10` reflex-arc test. An empty contour (a full,
+/// uncut circle) is central.
+fn contour_is_central(
+    center: Point3<f64>,
+    contour: &[ContourPoint],
+    barycenter: Point3<f64>,
+) -> bool {
+    // A reflex arc (> π) on the contour already wraps the centre.
+    const FLOAT_EPSILON: f64 = 1e-10;
+    if contour.iter().any(|cp| (cp.angle - FLOAT_EPSILON) > PI) {
+        return true;
+    }
+    // Otherwise central iff the barycentre lies on the centre's side of every edge.
+    let n = contour.len();
+    for i in 0..n {
+        let pi = contour[i].p;
+        let pj = contour[(i + 1) % n].p;
+        let edge = pj - pi;
+        // A degenerate (zero-length) edge can't disqualify the contour, so skip it.
+        // This matches the C++ — there a normalized zero vector gives a NaN test
+        // that never disqualifies — while avoiding a NaN leaking out of `normalize`.
+        let len = edge.norm();
+        if len < FLOAT_EPSILON {
+            continue;
+        }
+        let u_ij = edge / len;
+        // Foot of the perpendicular from the barycentre to edge i→j, then the
+        // perpendicular vector itself.
+        let foot = pi + u_ij * u_ij.dot(&(barycenter - pi));
+        let n_ijb = barycenter - foot;
+        if n_ijb.dot(&(center - pi)) < 0.0 {
+            return false;
+        }
+    }
+    true
 }
 
 // Hexagon vertices must lie outside the intersection circle to ensure

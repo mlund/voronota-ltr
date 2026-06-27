@@ -55,6 +55,7 @@ impl UpdateableResult {
                 id_b: cds.id_b,
                 area: cds.area,
                 arc_length: cds.arc_length,
+                central: cds.central,
             })
     }
 }
@@ -91,6 +92,7 @@ impl crate::types::Results for UpdateableResult {
                         id_b: cds.id_b,
                         area: cds.area,
                         arc_length: cds.arc_length,
+                        central: cds.central,
                     })
             })
             .collect()
@@ -346,6 +348,7 @@ impl UpdateableTessellation {
                         id_b: cds.id_b,
                         area: cds.area,
                         arc_length: cds.arc_length,
+                        central: cds.central,
                     })
             })
             .collect();

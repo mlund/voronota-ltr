@@ -141,7 +141,7 @@ pub fn compute_contacts_only(
         .collision_pairs
         .par_iter()
         .filter_map(|&(a_id, b_id)| {
-            let (area, arc_length) = construct_contact_area(
+            let (area, arc_length, central) = construct_contact_area(
                 ctx.searcher.spheres(),
                 a_id,
                 b_id,
@@ -153,6 +153,7 @@ pub fn compute_contacts_only(
                 id_b: b_id,
                 area,
                 arc_length,
+                central,
             })
         })
         .collect();
@@ -180,6 +181,7 @@ fn deduplicate_and_canonicalize_contacts(contacts: Vec<Contact>, n: usize) -> Ve
             id_b: key.1,
             area: c.area,
             arc_length: c.arc_length,
+            central: c.central,
         });
     }
     seen.into_values().collect()
@@ -246,6 +248,7 @@ fn compute_standard(
             id_b: r.summary.id_b,
             area: r.summary.area,
             arc_length: r.summary.arc_length,
+            central: r.summary.central,
         })
         .collect();
 
@@ -489,6 +492,7 @@ fn compute_periodic(
             id_b: s.id_b % n,
             area: s.area,
             arc_length: s.arc_length,
+            central: s.central,
         })
         .collect();
 

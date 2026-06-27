@@ -75,6 +75,11 @@ pub struct Contact {
     pub area: f64,
     /// Arc length of the contact boundary.
     pub arc_length: f64,
+    /// Whether the contact is *central*: its contour encloses the projection of
+    /// the intersection-circle centre (a fully buried, face-on contact), as
+    /// distinct from a peripheral/glancing one. Matches voronota-lt's `flags`
+    /// centrality bit; used by knowledge-based potentials such as VoroMQA.
+    pub central: bool,
 }
 
 /// Voronoi cell properties for a sphere.
@@ -392,6 +397,8 @@ pub struct ContactDescriptorSummary {
     pub id_a: usize,
     /// Index of the second sphere.
     pub id_b: usize,
+    /// Centrality of the contact (see [`Contact::central`]).
+    pub central: bool,
 }
 
 impl ContactDescriptorSummary {

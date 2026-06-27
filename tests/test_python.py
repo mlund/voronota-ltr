@@ -24,6 +24,12 @@ class TestVoronotaLtr(unittest.TestCase):
         self.assertEqual(len(result["contacts"]), 1)
         self.assertGreater(result["total_sas_area"], 0)
         self.assertGreater(result["total_volume"], 0)
+        # Every contact carries the centrality flag; a lone two-ball contact is a
+        # full, uncut disk, which is central.
+        contact = result["contacts"][0]
+        self.assertIn("central", contact)
+        self.assertIsInstance(contact["central"], bool)
+        self.assertTrue(contact["central"])
 
     def test_lists(self):
         """Balls as list of lists."""

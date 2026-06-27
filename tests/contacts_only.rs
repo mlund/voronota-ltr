@@ -39,6 +39,51 @@ fn contacts_only_matches_full_tessellation() {
             f.arc_length,
             c.arc_length
         );
+        assert_eq!(
+            f.central, c.central,
+            "central mismatch for ({}, {})",
+            f.id_a, f.id_b
+        );
+    }
+}
+
+/// The fast path must agree with the full tessellation on `central` even when some
+/// contacts are *peripheral* — the 3-ball fixture above is all-central, so this
+/// uses the 8-ball fixture from the centrality golden, which has both.
+#[test]
+fn contacts_only_central_matches_full_on_peripheral_fixture() {
+    let points = [
+        [0.0, 0.0, 0.0],
+        [2.5, 0.0, 0.0],
+        [1.25, 2.0, 0.0],
+        [1.25, 0.8, 2.0],
+        [0.0, 2.5, 1.0],
+        [2.5, 2.5, 1.0],
+        [1.25, -1.5, 1.0],
+        [3.5, 1.25, 1.0],
+    ];
+    let balls: Vec<Ball> = points
+        .iter()
+        .map(|p| Ball::new(p[0], p[1], p[2], 1.5))
+        .collect();
+
+    let mut full = compute_tessellation(&balls, 1.4, None, None, false).contacts;
+    let mut only = compute_contacts_only(&balls, 1.4, None, None);
+    full.sort_by_key(|c| (c.id_a, c.id_b));
+    only.sort_by_key(|c| (c.id_a, c.id_b));
+
+    assert_eq!(full.len(), only.len());
+    // At least one peripheral contact, or the test would not exercise central=false.
+    assert!(
+        full.iter().any(|c| !c.central),
+        "fixture has no peripheral contact"
+    );
+    for (f, c) in full.iter().zip(&only) {
+        assert_eq!(
+            f.central, c.central,
+            "central mismatch for ({}, {})",
+            f.id_a, f.id_b
+        );
     }
 }
 

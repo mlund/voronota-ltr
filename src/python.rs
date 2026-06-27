@@ -131,6 +131,7 @@ fn contacts_to_list<'py>(
         dict.set_item("id_b", c.id_b)?;
         dict.set_item("area", c.area)?;
         dict.set_item("arc_length", c.arc_length)?;
+        dict.set_item("central", c.central)?;
         list.append(dict)?;
     }
     Ok(list)
