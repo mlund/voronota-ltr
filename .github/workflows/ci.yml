@@ -63,8 +63,15 @@ jobs:
         with:
           python-version: "3.12"
       - name: Create virtual environment
-        run: python -m venv .venv && . .venv/bin/activate && pip install maturin numpy
+        run: python -m venv .venv && . .venv/bin/activate && pip install maturin
       - name: Build Python module
         run: . .venv/bin/activate && maturin develop --features python
+      - name: Test list input without NumPy
+        run: >-
+          . .venv/bin/activate && python -m unittest
+          tests.test_python.TestVoronotaLtr.test_tuples
+          tests.test_python.TestVoronotaLtr.test_hidden_and_detached_balls_have_distinct_measures
+      - name: Install test dependencies
+        run: . .venv/bin/activate && pip install numpy
       - name: Run Python tests
         run: . .venv/bin/activate && python -m unittest discover -s tests -p "test_*.py"

@@ -19,7 +19,9 @@ use crate::types::{
 /// * `balls` - Input spheres (center + radius)
 /// * `probe` - Probe radius added to each ball
 /// * `periodic_box` - Optional periodic boundary box
-/// * `groups` - Optional group IDs; contacts between same-group spheres are excluded
+/// * `groups` - Optional group IDs; contacts between same-group spheres are excluded. Filtering
+///   makes cell measures incomplete, so [`crate::Results::sas_areas`] and
+///   [`crate::Results::volumes`] report [`crate::CellMeasure::NotComputed`].
 /// * `with_cell_vertices` - If true, compute cell vertices and edges (tessellation network)
 ///
 /// # Example
@@ -51,6 +53,7 @@ pub fn compute_tessellation(
 struct CollisionContext {
     searcher: SpheresSearcher,
     all_collisions: Vec<Vec<ValuedId>>,
+    excluded: Vec<bool>,
     collision_pairs: Vec<(usize, usize)>,
     /// Original (non-populated) spheres, needed for cell computation in periodic mode.
     input_spheres: Vec<Sphere>,
@@ -60,6 +63,16 @@ struct CollisionContext {
 }
 
 impl CollisionContext {
+    fn find_collisions(searcher: &SpheresSearcher, n: usize) -> (Vec<Vec<ValuedId>>, Vec<bool>) {
+        (0..n)
+            .into_par_iter()
+            .map(|id| {
+                let result = searcher.find_colliding_ids(id, true);
+                (result.colliding_ids, result.excluded)
+            })
+            .unzip()
+    }
+
     fn new_standard(balls: &[Ball], probe: f64, groups: Option<&[i32]>) -> Self {
         let input_spheres: Vec<Sphere> =
             balls.iter().map(|b| Sphere::from_ball(b, probe)).collect();
@@ -67,14 +80,12 @@ impl CollisionContext {
         // Clone needed: SpheresSearcher takes ownership, but we keep input_spheres
         // for compute_cells which needs the original (non-populated) radii
         let searcher = SpheresSearcher::new(input_spheres.clone());
-        let all_collisions: Vec<Vec<ValuedId>> = (0..n)
-            .into_par_iter()
-            .map(|id| searcher.find_colliding_ids(id, true).colliding_ids)
-            .collect();
+        let (all_collisions, excluded) = Self::find_collisions(&searcher, n);
         let collision_pairs = collect_collision_pairs(&all_collisions, groups, None);
         Self {
             searcher,
             all_collisions,
+            excluded,
             collision_pairs,
             input_spheres,
             n,
@@ -94,14 +105,12 @@ impl CollisionContext {
         // 27 periodic images (3×3×3) so contacts across box boundaries are detected
         let populated_spheres = pbox.populate_periodic_spheres(&input_spheres);
         let searcher = SpheresSearcher::new(populated_spheres);
-        let all_collisions: Vec<Vec<ValuedId>> = (0..n)
-            .into_par_iter()
-            .map(|id| searcher.find_colliding_ids(id, true).colliding_ids)
-            .collect();
+        let (all_collisions, excluded) = Self::find_collisions(&searcher, n);
         let collision_pairs = collect_collision_pairs(&all_collisions, groups, Some(n));
         Self {
             searcher,
             all_collisions,
+            excluded,
             collision_pairs,
             input_spheres,
             n,
@@ -259,6 +268,7 @@ fn compute_standard(
         &valid_summaries,
         &ctx.input_spheres,
         &ctx.all_collisions,
+        &ctx.excluded,
         None,
     );
 
@@ -288,6 +298,7 @@ fn compute_standard(
         cells,
         cell_vertices,
         cell_edges,
+        cells_incomplete: groups.is_some(),
     }
 }
 
@@ -471,6 +482,7 @@ fn compute_periodic(
         &all_valid_summaries,
         &ctx.input_spheres,
         &ctx.all_collisions,
+        &ctx.excluded,
         Some(n),
     );
 
@@ -516,6 +528,7 @@ fn compute_periodic(
         cells,
         cell_vertices,
         cell_edges,
+        cells_incomplete: groups.is_some(),
     }
 }
 
@@ -608,6 +621,7 @@ fn compute_cells(
     summaries: &[ContactDescriptorSummary],
     spheres: &[Sphere],
     all_collisions: &[Vec<ValuedId>],
+    excluded: &[bool],
     periodic_n: Option<usize>,
 ) -> Vec<Cell> {
     let n = periodic_n.unwrap_or(spheres.len());
@@ -641,7 +655,7 @@ fn compute_cells(
     for (i, cs) in cell_summaries.iter_mut().enumerate() {
         if cs.stage == CellStage::ContactsAdded {
             cs.compute_sas(spheres[i].r);
-        } else if cs.stage == CellStage::Init && all_collisions[i].is_empty() {
+        } else if cs.stage == CellStage::Init && !excluded[i] && all_collisions[i].is_empty() {
             cs.compute_sas_detached(i, spheres[i].r);
         }
     }

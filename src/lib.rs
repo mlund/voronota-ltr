@@ -11,10 +11,17 @@
 //! providing contact areas between neighboring spheres and solvent-accessible
 //! surface (SAS) areas and volumes for each sphere.
 //!
+//! # Cell measures
+//!
+//! Detailed [`Cell`] records are sparse. The [`Results::sas_areas`] and [`Results::volumes`]
+//! methods instead return one [`CellMeasure`] per input ball. Detached balls are
+//! [`CellMeasure::Computed`] with their full-sphere measure, geometrically absent cells are
+//! [`CellMeasure::Empty`], and filtered results are [`CellMeasure::NotComputed`].
+//!
 //! # Example
 //!
 //! ```
-//! use voronota_ltr::{Ball, Results, compute_tessellation};
+//! use voronota_ltr::{Ball, CellMeasure, Results, compute_tessellation};
 //!
 //! let balls = vec![
 //!     Ball::new(0.0, 0.0, 0.0, 1.5),
@@ -24,12 +31,11 @@
 //!
 //! let result = compute_tessellation(&balls, 1.4, None, None, false);
 //!
-//! // Per-ball SAS areas and volumes (indexed by ball)
-//! // Returns None for atoms without contacts (lonely atoms)
-//! let sas_areas: Vec<Option<f64>> = result.sas_areas();
-//! let volumes: Vec<Option<f64>> = result.volumes();
+//! // Per-ball measures distinguish computed, empty, and unavailable cells.
+//! let sas_areas: Vec<CellMeasure> = result.sas_areas();
+//! let volumes: Vec<CellMeasure> = result.volumes();
 //!
-//! // Total SAS area (excludes lonely atoms)
+//! // Total SAS area across computed cells.
 //! let total_sas: f64 = result.total_sas_area();
 //!
 //! for contact in &result.contacts {
@@ -58,6 +64,7 @@ pub use solvent_spheres::{SolventSphere, SolventSpheresError, compute_solvent_sp
 pub use subdivided_icosahedron::SubdivisionDepth;
 pub use tessellation::{compute_contacts_only, compute_tessellation};
 pub use types::{
-    Ball, Cell, CellEdge, CellVertex, Contact, PeriodicBox, Results, TessellationResult,
+    Ball, Cell, CellEdge, CellMeasure, CellVertex, Contact, PeriodicBox, Results,
+    TessellationResult,
 };
 pub use updateable::{UpdateableResult, UpdateableTessellation};

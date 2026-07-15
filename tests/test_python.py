@@ -12,6 +12,12 @@ class TestVoronotaLtr(unittest.TestCase):
 
         self.assertTrue(hasattr(voronota_ltr, "compute_tessellation"))
 
+    def test_version(self):
+        """Module reports the package version."""
+        import voronota_ltr
+
+        self.assertEqual(voronota_ltr.__version__, "0.7.0")
+
     def test_tuples(self):
         """Balls as list of tuples."""
         import voronota_ltr
@@ -129,6 +135,20 @@ class TestVoronotaLtr(unittest.TestCase):
             groups=[0, 0, 1],  # First two in group 0, third in group 1
         )
         self.assertEqual(result["num_balls"], 3)
+        self.assertEqual(result["cell_states"], ["not_computed"] * 3)
+        self.assertEqual(result["sas_areas"], [None] * 3)
+        self.assertEqual(result["volumes"], [None] * 3)
+
+    def test_group_count_must_match_ball_count(self):
+        """Invalid group input raises ValueError instead of reaching Rust indexing."""
+        import voronota_ltr
+
+        with self.assertRaisesRegex(ValueError, "one group ID per ball"):
+            voronota_ltr.compute_tessellation(
+                balls=[(0, 0, 0, 1.5), (3, 0, 0, 1.5)],
+                probe=1.4,
+                groups=[0],
+            )
 
     def test_contact_structure(self):
         """Check contact dict structure."""
@@ -176,6 +196,22 @@ class TestVoronotaLtr(unittest.TestCase):
         )
         self.assertEqual(result["num_balls"], 1)
         self.assertEqual(len(result["contacts"]), 0)
+
+    def test_hidden_and_detached_balls_have_distinct_measures(self):
+        """Dense measures distinguish empty cells from detached spheres."""
+        import math
+        import voronota_ltr
+
+        result = voronota_ltr.compute_tessellation(
+            balls=[(0, 0, 0, 10), (0, 0, 0, 1), (40, 0, 0, 2)],
+            probe=0,
+        )
+
+        self.assertEqual(result["cell_states"], ["computed", "empty", "computed"])
+        self.assertEqual(result["sas_areas"][1], 0.0)
+        self.assertEqual(result["volumes"][1], 0.0)
+        self.assertAlmostEqual(result["sas_areas"][2], 4 * math.pi * 2**2)
+        self.assertAlmostEqual(result["volumes"][2], 4 / 3 * math.pi * 2**3)
 
     def test_invalid_ball_tuple(self):
         """Invalid ball tuple raises error."""

@@ -15,6 +15,7 @@ classifiers = [
 dynamic = ["version", "description", "license", "authors", "readme"]
 
 [project.optional-dependencies]
+numpy = ["numpy"]
 test = ["numpy"]
 
 [tool.maturin]

@@ -1,6 +1,6 @@
 [package]
 name = "voronota-ltr"
-version = "0.6.0"
+version = "0.7.0"
 edition = "2024"
 license = "MIT"
 authors = ["Kliment Olechnovic", "Mikael Lund"]
@@ -8,6 +8,7 @@ readme = "README.md"
 categories = ["science"]
 homepage = "https://www.voronota.com/expansion_lt"
 repository = "https://github.com/mlund/voronota-ltr"
+documentation = "https://docs.rs/voronota-ltr"
 keywords = ["voronoi", "tessellation", "molecule", "sasa", "bioinformatics"]
 description = "Voronota-LT is an alternative version of Voronota for constructing tessellation-derived atomic contact areas and volumes."
 

@@ -74,7 +74,13 @@ fn test_sasa_comparison_with_rust_sasa() {
         rust_sasa_result.iter().zip(voronota_sas.iter()).enumerate()
     {
         let rust_f64 = f64::from(*rust_val);
-        let voronota_f64 = voronota_val.unwrap_or(0.0);
+        let voronota_f64 = match voronota_val {
+            voronota_ltr::CellMeasure::Computed(value) => *value,
+            voronota_ltr::CellMeasure::Empty => 0.0,
+            voronota_ltr::CellMeasure::NotComputed => {
+                panic!("ungrouped tessellation must compute every non-empty cell")
+            }
+        };
         total_rust += rust_f64;
         total_voronota += voronota_f64;
         let diff = (rust_f64 - voronota_f64).abs();

@@ -14,6 +14,7 @@ Outputs inter-atom contact areas, solvent accessible surface (SAS) areas, and vo
 - [x] Updateable tessellation for incremental updates (stateful)
 - [x] Periodic boundaries
 - [x] Per atom SASA and volume
+- [x] Explicit computed, empty, and unavailable cell measures
 - [x] Contacts-only mode (skips cells/SAS/volumes for ~30–50% speedup)
 - [x] Groupings to avoid internal contacts
 - [x] Parallel processing using Rayon - see benchmarks below
@@ -33,10 +34,17 @@ The port can be used either as a library for other projects, or as a basic CLI t
 cargo install voronota-ltr
 ```
 
+The Python extension can be installed with `pip install voronota-ltr`. Building from source
+requires a Rust toolchain. Install `voronota-ltr[numpy]` when using NumPy array input.
+
+Version 0.7 fixes an ambiguity in per-ball measures and changes the Rust return type from
+`Vec<Option<f64>>` to `Vec<CellMeasure>`. See the [cell-measure migration guide](docs/cell-measures.md)
+and [0.7 release notes](CHANGELOG.md#070---unreleased).
+
 ## Rust API
 
 ```rust
-use voronota_ltr::{Ball, Results, compute_tessellation};
+use voronota_ltr::{Ball, CellMeasure, Results, compute_tessellation};
 
 let balls = vec![
     Ball::new(0.0, 0.0, 0.0, 1.5),
@@ -46,10 +54,17 @@ let balls = vec![
 
 let result = compute_tessellation(&balls, 1.4, None, None, false);
 
-// Per-ball SAS areas and volumes (indexed by ball)
-// Returns None for atoms without contacts (lonely atoms)
-let sas_areas: Vec<Option<f64>> = result.sas_areas();
-let volumes: Vec<Option<f64>> = result.volumes();
+// Per-ball measures distinguish computed, empty, and unavailable cells.
+let sas_areas: Vec<CellMeasure> = result.sas_areas();
+let volumes: Vec<CellMeasure> = result.volumes();
+
+for (index, volume) in volumes.iter().enumerate() {
+    match volume {
+        CellMeasure::Computed(value) => println!("ball {index}: {value:.3} Å³"),
+        CellMeasure::Empty => println!("ball {index}: empty weighted cell"),
+        CellMeasure::NotComputed => println!("ball {index}: measure unavailable"),
+    }
+}
 
 // Total SAS area
 let total_sas: f64 = result.total_sas_area();
@@ -173,7 +188,7 @@ import json
 with open("results.json") as f:
     data = json.load(f)
 
-# Per-ball data (indexed by ball, None for atoms without contacts)
+# Per-ball data (indexed by ball, None when no cell was included in the CLI result)
 sas_areas = data["sas_areas"]  # list of float or None
 volumes = data["volumes"]  # list of float or None
 
@@ -200,7 +215,15 @@ This creates three CGO objects: `contacts_balls` (cyan spheres), `contacts_faces
 
 ## Python Interface
 
-Install directly from GitHub (requires a [Rust toolchain](https://rustup.rs/)):
+Install from PyPI:
+
+```sh
+pip install voronota-ltr
+# Optional NumPy array input
+pip install "voronota-ltr[numpy]"
+```
+
+Alternatively, install directly from GitHub (requires a [Rust toolchain](https://rustup.rs/)):
 
 ```sh
 pip install git+https://github.com/mlund/voronota-ltr.git
@@ -222,7 +245,8 @@ Run tests:
 python -m unittest discover -s tests -p "test_*.py"
 ```
 
-Basic usage; input balls can be tuples, dicts, or NumPy arrays.
+Basic usage; input balls can be tuples, dicts, or NumPy arrays. NumPy is optional when passing
+ordinary Python lists.
 
 ```python
 from voronota_ltr import compute_tessellation
@@ -235,9 +259,24 @@ result = compute_tessellation(
 print(f"Total SAS area: {result['total_sas_area']:.2f}")
 print(f"Total volume: {result['total_volume']:.2f}")
 
+# Dense per-ball output. Empty cells are zero; unavailable cells are None.
+for index, (state, volume) in enumerate(zip(result["cell_states"], result["volumes"])):
+    print(f"Ball {index}: state={state}, volume={volume}")
+
 for contact in result["contacts"]:
     print(f"Contact {contact['id_a']}-{contact['id_b']}: area={contact['area']:.2f}")
 ```
+
+The dense `cell_states`, `sas_areas`, and `volumes` lists always have `num_balls` entries:
+
+| `cell_states[i]` | `sas_areas[i]` / `volumes[i]` | Meaning |
+|---|---:|---|
+| `"computed"` | float | A cell was computed; detached balls have their full-sphere measure. |
+| `"empty"` | `0.0` | The weighted cell is geometrically empty. |
+| `"not_computed"` | `None` | Filtering prevented a complete cell calculation. |
+
+The sparse `cells` list remains available for detailed cell records. See the
+[Python API guide](docs/python-api.md) for the complete result schema.
 
 With periodic boundaries:
 
@@ -385,4 +424,3 @@ Performance on Apple M4 processor (10 cores) - the speedup is relative to single
 MIT License
 
 Copyright (c) 2026 Kliment Olechnovic and Mikael Lund
-

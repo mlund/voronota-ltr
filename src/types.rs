@@ -183,6 +183,34 @@ impl Ord for ValuedId {
     }
 }
 
+/// A scalar measure associated with one input ball's tessellation cell.
+///
+/// Detached balls have a [`CellMeasure::Computed`] full-sphere measure. A ball whose weighted
+/// cell is geometrically empty is [`CellMeasure::Empty`], making zero volume explicit instead of
+/// overloading [`Option::None`].
+#[derive(Debug, Clone, Copy, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum CellMeasure {
+    /// The cell was computed and has the contained measure.
+    Computed(f64),
+    /// The ball has no geometrical cell and therefore contributes zero.
+    Empty,
+    /// Contact filtering prevented the cell from being computed.
+    NotComputed,
+}
+
+pub(crate) fn computed_cell_measures(
+    num_balls: usize,
+    cells: &[Cell],
+    extract: impl Fn(&Cell) -> f64,
+) -> Vec<CellMeasure> {
+    let mut measures = vec![CellMeasure::Empty; num_balls];
+    for cell in cells {
+        measures[cell.index] = CellMeasure::Computed(extract(cell));
+    }
+    measures
+}
+
 /// Trait for accessing tessellation results (contacts and cells).
 pub trait Results {
     /// Number of balls in the tessellation.
@@ -199,38 +227,25 @@ pub trait Results {
 
     /// Get solvent-accessible surface area for each ball as a Vec.
     ///
-    /// Returns a Vec of length `num_balls` where index `i` contains the
-    /// SAS area for ball `i`. Returns `None` for atoms without contacts
-    /// (lonely atoms); users can compute their full spherical surface
-    /// area as `4 * π * (r + probe)²` if needed.
+    /// Returns one explicit measure per input ball. Detached balls contain their full spherical
+    /// area; balls with an empty weighted cell contain [`CellMeasure::Empty`]. Filtered results
+    /// contain [`CellMeasure::NotComputed`] because their cell measures are incomplete.
     #[must_use]
-    fn sas_areas(&self) -> Vec<Option<f64>> {
-        let mut result = vec![None; self.num_balls()];
-        for cell in self.cells() {
-            result[cell.index] = Some(cell.sas_area);
-        }
-        result
-    }
+    fn sas_areas(&self) -> Vec<CellMeasure>;
 
     /// Get cell volumes for each ball as a Vec.
     ///
-    /// Returns a Vec of length `num_balls` where index `i` contains the
-    /// volume for ball `i`. Returns `None` for atoms without contacts
-    /// (lonely atoms); users can compute their full spherical volume
-    /// as `4/3 * π * (r + probe)³` if needed.
+    /// Returns one explicit measure per input ball. Detached balls contain their full spherical
+    /// volume; balls with an empty weighted cell contain [`CellMeasure::Empty`]. Filtered results
+    /// contain [`CellMeasure::NotComputed`] because their cell measures are incomplete.
     #[must_use]
-    fn volumes(&self) -> Vec<Option<f64>> {
-        let mut result = vec![None; self.num_balls()];
-        for cell in self.cells() {
-            result[cell.index] = Some(cell.volume);
-        }
-        result
-    }
+    fn volumes(&self) -> Vec<CellMeasure>;
 
     /// Get total solvent-accessible surface area across all balls.
     ///
-    /// Only includes atoms with computed cells (atoms with contacts).
-    /// Lonely atoms (no contacts) are excluded from the sum.
+    /// This sums the sparse computed-cell data. It is a partial total when contact filtering
+    /// prevented some cells from being computed; inspect [`Results::sas_areas`] for filtered
+    /// results.
     #[must_use]
     fn total_sas_area(&self) -> f64 {
         self.cells().iter().map(|c| c.sas_area).sum()
@@ -238,8 +253,9 @@ pub trait Results {
 
     /// Get total volume across all balls.
     ///
-    /// Only includes atoms with computed cells (atoms with contacts).
-    /// Lonely atoms (no contacts) are excluded from the sum.
+    /// This sums the sparse computed-cell data. It is a partial total when contact filtering
+    /// prevented some cells from being computed; inspect [`Results::volumes`] for filtered
+    /// results.
     #[must_use]
     fn total_volume(&self) -> f64 {
         self.cells().iter().map(|c| c.volume).sum()
@@ -253,6 +269,9 @@ pub trait Results {
 }
 
 /// Result of a tessellation computation.
+///
+/// [`TessellationResult::cells`] stores computed cells sparsely. Use [`Results::sas_areas`] and
+/// [`Results::volumes`] for dense per-ball measures with explicit empty/unavailable states.
 #[derive(Debug, Clone, Default)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct TessellationResult {
@@ -266,6 +285,8 @@ pub struct TessellationResult {
     pub cell_vertices: Option<Vec<CellVertex>>,
     /// Tessellation edges (optional, enabled via `with_cell_vertices`).
     pub cell_edges: Option<Vec<CellEdge>>,
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub(crate) cells_incomplete: bool,
 }
 
 impl Results for TessellationResult {
@@ -283,6 +304,22 @@ impl Results for TessellationResult {
 
     fn contacts(&self) -> Vec<Contact> {
         self.contacts.clone()
+    }
+
+    fn sas_areas(&self) -> Vec<CellMeasure> {
+        if self.cells_incomplete {
+            vec![CellMeasure::NotComputed; self.num_balls]
+        } else {
+            computed_cell_measures(self.num_balls, &self.cells, |cell| cell.sas_area)
+        }
+    }
+
+    fn volumes(&self) -> Vec<CellMeasure> {
+        if self.cells_incomplete {
+            vec![CellMeasure::NotComputed; self.num_balls]
+        } else {
+            computed_cell_measures(self.num_balls, &self.cells, |cell| cell.volume)
+        }
     }
 }
 

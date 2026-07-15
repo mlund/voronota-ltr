@@ -12,7 +12,7 @@ use std::path::Path;
 
 use crate::input::compute_tessellation_from_file as compute_from_file_rs;
 use crate::{
-    Ball, PeriodicBox, Results, SolventSphere, SubdivisionDepth,
+    Ball, CellMeasure, PeriodicBox, Results, SolventSphere, SubdivisionDepth,
     compute_solvent_spheres as compute_solvent_spheres_rs,
     compute_tessellation as compute_tessellation_rs,
 };
@@ -67,8 +67,14 @@ fn parse_single_ball(obj: &Bound<'_, PyAny>) -> PyResult<Ball> {
 
 /// Parse balls from list of tuples/dicts or numpy array (N x 4).
 fn parse_balls(obj: &Bound<'_, PyAny>) -> PyResult<Vec<Ball>> {
-    // Try numpy array first (N x 4)
-    if let Ok(arr) = obj.extract::<PyReadonlyArray2<f64>>() {
+    // Lists are the dependency-free path. Trying NumPy extraction first initializes its C API,
+    // which panics when NumPy is not installed even though list input does not need it.
+    if let Ok(list) = obj.cast::<PyList>() {
+        return list.iter().map(|item| parse_single_ball(&item)).collect();
+    }
+
+    if obj.get_type().module()?.to_str()?.starts_with("numpy") {
+        let arr = obj.extract::<PyReadonlyArray2<f64>>()?;
         let shape = arr.shape();
         if shape[1] != 4 {
             return Err(pyo3::exceptions::PyValueError::new_err(
@@ -83,9 +89,9 @@ fn parse_balls(obj: &Bound<'_, PyAny>) -> PyResult<Vec<Ball>> {
             .collect());
     }
 
-    // Otherwise iterate as list
-    let list = obj.cast::<PyList>()?;
-    list.iter().map(|item| parse_single_ball(&item)).collect()
+    Err(pyo3::exceptions::PyTypeError::new_err(
+        "balls must be a list or a NumPy array with shape (N, 4)",
+    ))
 }
 
 /// Parse periodic box from dict with either "corners" or "vectors" key.
@@ -150,6 +156,43 @@ fn cells_to_list<'py>(py: Python<'py>, cells: &[crate::Cell]) -> PyResult<Bound<
     Ok(list)
 }
 
+/// Convert dense Rust cell measures to parallel Python lists without losing state information.
+fn cell_measures_to_lists<'py>(
+    py: Python<'py>,
+    result: &crate::TessellationResult,
+) -> PyResult<(Bound<'py, PyList>, Bound<'py, PyList>, Bound<'py, PyList>)> {
+    let states = PyList::empty(py);
+    let sas_areas = PyList::empty(py);
+    let volumes = PyList::empty(py);
+
+    for (sas_area, volume) in result.sas_areas().into_iter().zip(result.volumes()) {
+        match (sas_area, volume) {
+            (CellMeasure::Computed(sas_area), CellMeasure::Computed(volume)) => {
+                states.append("computed")?;
+                sas_areas.append(sas_area)?;
+                volumes.append(volume)?;
+            }
+            (CellMeasure::Empty, CellMeasure::Empty) => {
+                states.append("empty")?;
+                sas_areas.append(0.0)?;
+                volumes.append(0.0)?;
+            }
+            (CellMeasure::NotComputed, CellMeasure::NotComputed) => {
+                states.append("not_computed")?;
+                sas_areas.append(py.None())?;
+                volumes.append(py.None())?;
+            }
+            _ => {
+                return Err(pyo3::exceptions::PyRuntimeError::new_err(
+                    "inconsistent SAS area and volume cell states",
+                ));
+            }
+        }
+    }
+
+    Ok((states, sas_areas, volumes))
+}
+
 /// Convert cell vertices to list of dicts.
 #[allow(clippy::cast_possible_wrap)] // Array indices won't overflow i64
 fn vertices_to_list<'py>(
@@ -190,10 +233,14 @@ fn result_to_dict<'py>(
     py: Python<'py>,
     result: &crate::TessellationResult,
 ) -> PyResult<Bound<'py, PyDict>> {
+    let (cell_states, sas_areas, volumes) = cell_measures_to_lists(py, result)?;
     let dict = PyDict::new(py);
     dict.set_item("num_balls", result.num_balls)?;
     dict.set_item("contacts", contacts_to_list(py, &result.contacts)?)?;
     dict.set_item("cells", cells_to_list(py, &result.cells)?)?;
+    dict.set_item("cell_states", cell_states)?;
+    dict.set_item("sas_areas", sas_areas)?;
+    dict.set_item("volumes", volumes)?;
     dict.set_item("total_sas_area", result.total_sas_area())?;
     dict.set_item("total_volume", result.total_volume())?;
     dict.set_item("total_contact_area", result.total_contact_area())?;
@@ -221,17 +268,20 @@ fn result_to_dict<'py>(
 /// * `periodic_box` - Optional periodic boundary conditions as dict:
 ///   - `{"corners": [(x1,y1,z1), (x2,y2,z2)]}` for orthorhombic box
 ///   - `{"vectors": [(ax,ay,az), (bx,by,bz), (cx,cy,cz)]}` for triclinic cell
-/// * `groups` - Optional list of group IDs for filtering inter-group contacts
+/// * `groups` - Optional list with one group ID per ball for filtering inter-group contacts
 /// * `with_cell_vertices` - If True, include tessellation vertices and edges in output
 ///
 /// # Returns
 ///
 /// Dict containing:
 /// * `num_balls` - Number of input spheres
-/// * `contacts` - List of contact dicts with `id_a`, `id_b`, `area`, `arc_length`
-/// * `cells` - List of cell dicts with `index`, `sas_area`, `volume`
-/// * `total_sas_area` - Total solvent-accessible surface area
-/// * `total_volume` - Total volume
+/// * `contacts` - Contact dicts with `id_a`, `id_b`, `area`, `arc_length`, and `central`
+/// * `cells` - Sparse cell dicts with `index`, `sas_area`, and `volume`
+/// * `cell_states` - Dense list of `computed`, `empty`, or `not_computed`
+/// * `sas_areas` - Dense list of floats; empty is `0.0`, unavailable is `None`
+/// * `volumes` - Dense list of floats; empty is `0.0`, unavailable is `None`
+/// * `total_sas_area` - Sum over sparse computed cells
+/// * `total_volume` - Sum over sparse computed cells
 /// * `total_contact_area` - Total contact area
 /// * `cell_vertices` - (optional) List of vertex dicts if `with_cell_vertices=True`
 /// * `cell_edges` - (optional) List of edge dicts if `with_cell_vertices=True`
@@ -247,6 +297,14 @@ fn compute_tessellation<'py>(
     with_cell_vertices: bool,
 ) -> PyResult<Bound<'py, PyDict>> {
     let balls = parse_balls(balls)?;
+    if groups
+        .as_ref()
+        .is_some_and(|group_ids| group_ids.len() != balls.len())
+    {
+        return Err(pyo3::exceptions::PyValueError::new_err(
+            "groups must contain one group ID per ball",
+        ));
+    }
     let pbox = periodic_box.map(parse_periodic_box).transpose()?;
 
     // Release GIL during computation
@@ -394,6 +452,7 @@ fn compute_solvent_spheres<'py>(
 /// Python module definition.
 #[pymodule]
 fn voronota_ltr(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    m.add("__version__", env!("CARGO_PKG_VERSION"))?;
     m.add_function(wrap_pyfunction!(compute_tessellation, m)?)?;
     m.add_function(wrap_pyfunction!(compute_tessellation_from_file, m)?)?;
     m.add_function(wrap_pyfunction!(compute_solvent_spheres, m)?)?;

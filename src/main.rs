@@ -17,16 +17,33 @@ use voronota_ltr::input::{
     InputFormat, ParseOptions, RadiiLookup, build_chain_grouping, build_custom_grouping,
     build_residue_grouping, parse_file_with_records, parse_reader, parse_selections,
 };
-use voronota_ltr::{PeriodicBox, Results, TessellationResult, compute_tessellation};
+use voronota_ltr::{
+    Cell, CellEdge, CellVertex, Contact, PeriodicBox, Results, compute_tessellation,
+};
+
+fn optional_measures(
+    num_balls: usize,
+    cells: &[Cell],
+    extract: impl Fn(&Cell) -> f64,
+) -> Vec<Option<f64>> {
+    let mut measures = vec![None; num_balls];
+    for cell in cells {
+        measures[cell.index] = Some(extract(cell));
+    }
+    measures
+}
 
 /// Extended JSON output including per-ball SASA/volumes and totals
 #[derive(Serialize)]
-struct JsonOutput {
-    #[serde(flatten)]
-    result: TessellationResult,
-    /// Per-ball SAS areas. `null` for atoms without contacts (lonely atoms).
+struct JsonOutput<'a> {
+    num_balls: usize,
+    contacts: &'a [Contact],
+    cells: &'a [Cell],
+    cell_vertices: &'a Option<Vec<CellVertex>>,
+    cell_edges: &'a Option<Vec<CellEdge>>,
+    /// Per-ball SAS areas. `null` for balls without a computed cell.
     sas_areas: Vec<Option<f64>>,
-    /// Per-ball volumes. `null` for atoms without contacts (lonely atoms).
+    /// Per-ball volumes. `null` for balls without a computed cell.
     volumes: Vec<Option<f64>>,
     total_sas_area: f64,
     total_volume: f64,
@@ -282,12 +299,16 @@ fn main() -> io::Result<()> {
 
     // Build extended JSON output with per-ball SASA/volumes and totals
     let output = JsonOutput {
-        sas_areas: result.sas_areas(),
-        volumes: result.volumes(),
+        num_balls: result.num_balls,
+        contacts: &result.contacts,
+        cells: &result.cells,
+        cell_vertices: &result.cell_vertices,
+        cell_edges: &result.cell_edges,
+        sas_areas: optional_measures(result.num_balls, &result.cells, |cell| cell.sas_area),
+        volumes: optional_measures(result.num_balls, &result.cells, |cell| cell.volume),
         total_sas_area: result.total_sas_area(),
         total_volume: result.total_volume(),
         total_contact_area: result.total_contact_area(),
-        result,
     };
 
     // Write JSON output

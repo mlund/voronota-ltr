@@ -14,8 +14,8 @@ use serde::{Deserialize, Serialize};
 use crate::contact::construct_contact_descriptor;
 use crate::spheres_container::SpheresContainer;
 use crate::types::{
-    Ball, Cell, CellContactSummary, CellStage, Contact, ContactDescriptorSummary, PeriodicBox,
-    Sphere, TessellationResult,
+    Ball, Cell, CellContactSummary, CellMeasure, CellStage, Contact, ContactDescriptorSummary,
+    PeriodicBox, Sphere, TessellationResult, computed_cell_measures,
 };
 
 /// Result of updateable tessellation with per-sphere contact storage.
@@ -96,6 +96,14 @@ impl crate::types::Results for UpdateableResult {
                     })
             })
             .collect()
+    }
+
+    fn sas_areas(&self) -> Vec<CellMeasure> {
+        computed_cell_measures(self.num_balls, &self.cells, |cell| cell.sas_area)
+    }
+
+    fn volumes(&self) -> Vec<CellMeasure> {
+        computed_cell_measures(self.num_balls, &self.cells, |cell| cell.volume)
     }
 }
 
@@ -374,6 +382,7 @@ impl UpdateableTessellation {
             cells,
             cell_vertices: None,
             cell_edges: None,
+            cells_incomplete: false,
         }
     }
 
