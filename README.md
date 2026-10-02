@@ -39,7 +39,7 @@ requires a Rust toolchain. Install `voronota-ltr[numpy]` when using NumPy array 
 
 Version 0.7 fixes an ambiguity in per-ball measures and changes the Rust return type from
 `Vec<Option<f64>>` to `Vec<CellMeasure>`. See the [cell-measure migration guide](docs/cell-measures.md)
-and [0.7 release notes](CHANGELOG.md#070---unreleased).
+and [0.7 release notes](CHANGELOG.md#070).
 
 ## Rust API
 

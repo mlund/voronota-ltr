@@ -9,7 +9,7 @@ use crate::geometry::{
 use crate::types::{Sphere, ValuedId};
 
 /// Grid coordinates for spatial indexing
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 struct GridPoint {
     x: i32,
     y: i32,
@@ -142,34 +142,34 @@ impl SpheresSearcher {
 
     /// Update sphere positions and rebuild spatial index for changed spheres.
     pub fn update(&mut self, spheres: &[Sphere], changed_ids: &[usize]) {
-        // Update sphere positions
-        for &id in changed_ids {
-            if id < self.spheres.len() && id < spheres.len() {
-                self.spheres[id] = spheres[id];
-            }
+        let valid = |id: usize| id < self.spheres.len() && id < spheres.len();
+        let changed: Vec<usize> = changed_ids
+            .iter()
+            .copied()
+            .filter(|&id| valid(id))
+            .collect();
+
+        // Leave the old cells while the stored positions still locate them (as the C++
+        // `update_sphere` does). Removing after the positions are updated would search the new
+        // cell, leaving a moved sphere registered in two cells and found twice by neighbours.
+        for &id in &changed {
+            self.remove_sphere_from_grid(id);
+        }
+        for &id in &changed {
+            self.spheres[id] = spheres[id];
         }
 
-        // Check if grid parameters changed significantly
+        // A changed box size, grid size or offset invalidates the cell indices: rebuild.
         let new_params = GridParameters::new(&self.spheres);
         if (new_params.box_size - self.grid_params.box_size).abs() > 0.01
-            || new_params.grid_size.x != self.grid_params.grid_size.x
-            || new_params.grid_size.y != self.grid_params.grid_size.y
-            || new_params.grid_size.z != self.grid_params.grid_size.z
+            || new_params.grid_size != self.grid_params.grid_size
+            || new_params.grid_offset != self.grid_params.grid_offset
         {
-            // Full rebuild needed
             self.grid_params = new_params;
             self.init_boxes();
         } else {
-            // Incremental update: remove and re-add changed spheres
-            for &id in changed_ids {
-                if id < self.spheres.len() {
-                    self.remove_sphere_from_grid(id);
-                }
-            }
-            for &id in changed_ids {
-                if id < self.spheres.len() {
-                    self.add_sphere_to_grid(id);
-                }
+            for &id in &changed {
+                self.add_sphere_to_grid(id);
             }
         }
     }

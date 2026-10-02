@@ -1,6 +1,18 @@
 # Changelog
 
-## 0.7.0 - Unreleased
+## 0.7.1
+
+### Fixed
+
+- `UpdateableTessellation` could return wrong contacts, areas and volumes after a large move. The
+  spatial grid removed a moved sphere from the cell of its new position instead of its old one, so
+  a sphere that changed cell stayed registered in both and neighbour searches listed it twice.
+  Spheres now leave their old cells before their positions are updated, as in the C++
+  `update_sphere`, and a shifted grid offset now triggers a full rebuild.
+- A regression test compares per-ball volumes after a large rigid move. The existing incremental
+  tests moved spheres too little to change grid cell and did not compare volumes.
+
+## 0.7.0
 
 ### Changed
 

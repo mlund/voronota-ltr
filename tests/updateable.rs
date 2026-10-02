@@ -7,7 +7,9 @@ mod common;
 use std::fs;
 
 use approx::assert_abs_diff_eq;
-use voronota_ltr::{Ball, PeriodicBox, UpdateableTessellation, compute_tessellation};
+use voronota_ltr::{
+    Ball, CellMeasure, PeriodicBox, Results, UpdateableTessellation, compute_tessellation,
+};
 
 fn load_xyzr(path: &str) -> Vec<Ball> {
     let content = fs::read_to_string(path).expect("Failed to read file");
@@ -318,4 +320,46 @@ fn updateable_balls_2zsk() {
 
     assert_eq!(incr.contacts.len(), full.contacts.len());
     assert_eq!(incr.cells.len(), full.cells.len());
+}
+
+/// Regression: a large rigid move (a 28-ball arc of a ring rotated about the axis through its
+/// flanking balls, as in a polymer crankshaft move) carried balls into other grid cells. The
+/// searcher removed them from the cell of their new position rather than their old one, so they
+/// stayed registered in both, neighbour searches listed them twice, and duplicated contacts cut
+/// four cells twice. Small shifts never change cell, so volumes must be compared after big moves.
+#[test]
+fn updateable_large_rigid_move_matches_full_volumes() {
+    let before = load_xyzr("tests/data/ring_crankshaft_before.xyzr");
+    let after = load_xyzr("tests/data/ring_crankshaft_after.xyzr");
+    let moved: Vec<usize> = (75..100).chain(0..3).collect();
+    let probe = 3.0;
+
+    let mut tess = UpdateableTessellation::with_backup();
+    assert!(tess.init(&before, probe, None));
+    assert!(tess.update_with_changed(&after, &moved));
+    assert!(
+        !tess.last_update_was_full_reinit(),
+        "must exercise the incremental path"
+    );
+
+    let full = compute_tessellation(&after, probe, None, None, false);
+    let incremental = tess.summary();
+    assert_eq!(
+        incremental.contacts.len(),
+        full.contacts.len(),
+        "duplicated contacts"
+    );
+    for (i, (inc, ful)) in incremental.volumes().iter().zip(full.volumes()).enumerate() {
+        match (inc, ful) {
+            (CellMeasure::Computed(a), CellMeasure::Computed(b)) => {
+                assert_abs_diff_eq!(*a, b, epsilon = 1e-9);
+            }
+            (a, b) => assert_eq!(*a, b, "ball {i}: cell state differs"),
+        }
+    }
+
+    // Rolling back must restore the exact starting volumes too.
+    assert!(tess.restore());
+    let start = compute_tessellation(&before, probe, None, None, false).total_volume();
+    assert_abs_diff_eq!(tess.summary().total_volume(), start, epsilon = 1e-9);
 }
