@@ -1,6 +1,8 @@
 """Tests for voronota-ltr Python bindings."""
 
+import re
 import unittest
+from pathlib import Path
 
 
 class TestVoronotaLtr(unittest.TestCase):
@@ -13,10 +15,12 @@ class TestVoronotaLtr(unittest.TestCase):
         self.assertTrue(hasattr(voronota_ltr, "compute_tessellation"))
 
     def test_version(self):
-        """Module reports the package version."""
+        """Module reports the Cargo.toml version (read here so bumps don't break the test)."""
         import voronota_ltr
 
-        self.assertEqual(voronota_ltr.__version__, "0.7.0")
+        cargo = (Path(__file__).parent.parent / "Cargo.toml").read_text()
+        expected = re.search(r'^version = "([^"]+)"', cargo, re.M).group(1)
+        self.assertEqual(voronota_ltr.__version__, expected)
 
     def test_tuples(self):
         """Balls as list of tuples."""

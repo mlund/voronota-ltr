@@ -73,7 +73,7 @@ fn parse_balls(obj: &Bound<'_, PyAny>) -> PyResult<Vec<Ball>> {
         return list.iter().map(|item| parse_single_ball(&item)).collect();
     }
 
-    if obj.get_type().module()?.to_str()?.starts_with("numpy") {
+    if obj.get_type().module()?.to_cow()?.starts_with("numpy") {
         let arr = obj.extract::<PyReadonlyArray2<f64>>()?;
         let shape = arr.shape();
         if shape[1] != 4 {
