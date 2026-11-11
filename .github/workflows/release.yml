@@ -52,7 +52,7 @@ jobs:
 
   macos:
     # arm64 runner cross-compiles x86_64; Intel runners are being retired.
-    runs-on: macos-14
+    runs-on: macos-latest
     strategy:
       matrix:
         target: [x86_64, aarch64]
